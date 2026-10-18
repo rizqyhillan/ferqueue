@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Environment and secrets
+.env
+!.env.example
+
+# Data and model artifacts
+data/raw/*
+data/processed/*
+!data/raw/
+!data/processed/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+models/*
+!models/mobilenet/
+!models/.gitkeep
+!models/mobilenet/.gitkeep
+*.onnx
+*.pb
+*.tflite
+*.weights
+*.h5
+*.pt
+*.mp4
+*.avi
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# PlatformIO
+.pio/
+.vscode/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.log
