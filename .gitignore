@@ -2,6 +2,12 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-data/
+.venv-cv/
+.venv-training/
+.venv-tools/
+.venv-inference/
+.cache/
 venv/
 .pytest_cache/
 .mypy_cache/
@@ -17,6 +23,9 @@ data/processed/*
 !data/processed/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/raw/vehicles/
+data/raw/vehicles/**
+!data/raw/vehicles/.gitkeep
 models/*
 !models/mobilenet/
 !models/.gitkeep
@@ -43,3 +52,11 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# Offline prediction inputs/results and local experiment artifacts
+data/inference/*
+!data/inference/.gitkeep
+outputs/*
+!outputs/.gitkeep
+models/mobilenet/*
+!models/mobilenet/.gitkeep

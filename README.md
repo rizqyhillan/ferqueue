@@ -1,129 +1,106 @@
 # FERQUEUE
 
-FERQUEUE adalah sistem manajemen antrean kendaraan untuk proses masuk kapal feri. Sistem menggabungkan timbangan berbasis load cell, ESP32, servo gate, web monitoring, backend, dan Computer Vision untuk mencatat kendaraan, mengatur antrean parkiran, menentukan kendaraan yang boleh masuk feri, dan memantau proses boarding.
+Computer vision kendaraan menggunakan **SSD MobileNet V2 FPNLite 320×320**, dengan rencana integrasi hasil PCV dan berat load cell melalui backend, PostgreSQL, dan web. Metode sistem cerdas masih akan dibandingkan, belum ditetapkan.
 
-## Gambaran proyek
+## Cara kerja tim sekarang
 
-Sistem dibagi menjadi empat bagian utama:
+Seluruh training dilakukan pada **satu laptop Windows 10/11 dengan NVIDIA RTX 4060**, melalui Ubuntu WSL2 dan environment Python. Laptop anggota lain tidak perlu memasang environment training. Tidak ada kebutuhan Docker atau layanan cloud untuk alur ini.
 
-- **Gate awal** — load cell dan HX711 membaca berat kendaraan, sedangkan ESP32 mengendalikan servo.
-- **Web monitoring** — operator memasukkan jenis dan warna kendaraan, melihat berat, antrean, kapasitas feri, serta status boarding.
-- **Backend dan sistem cerdas** — menyimpan data, membuat nomor antrean, menentukan kendaraan yang boleh boarding, dan menjadi pusat komunikasi seluruh komponen.
-- **Computer Vision** — menggunakan satu kamera di parkiran dekat jalur masuk feri untuk mendeteksi kendaraan yang benar-benar bergerak menuju feri.
-
-Jenis dan warna kendaraan digunakan untuk membantu identifikasi, tetapi setiap kendaraan tetap memiliki `queue_id` unik karena beberapa kendaraan dapat mempunyai jenis dan warna yang sama.
-
-## Pembagian jobdesk
-
-| Anggota | Tanggung jawab | Folder kerja |
+| Pekerjaan | Perangkat | Mulai dari |
 | --- | --- | --- |
-| Hillan | Computer Vision: kamera, ROI, virtual line, deteksi jenis dan warna, tracking, serta penghitungan kendaraan yang masuk feri | `apps/computer-vision/`, `models/mobilenet/`, `data/` |
-| Zafar | Sistem tertanam: ESP32, load cell, HX711, kalibrasi berat, servo gate, telemetry, dan mekanisme fail-safe | `firmware/esp32-gate/` |
-| Zaki | Backend dan sistem cerdas: kontrak data, database, API, antrean, perhitungan kapasitas, keputusan boarding, serta integrasi seluruh komponen | `apps/backend/`, `shared/contracts/` |
-| Akbar | Web monitoring: form pendataan kendaraan, dashboard antrean, konfigurasi feri, monitoring boarding, dan status perangkat | `apps/web-monitoring/` |
+| Labeling, pemeriksaan dan pembagian dataset | Laptop anggota tim, Windows | `scripts/cv.ps1 setup-data` |
+| Training, ekspor, dan evaluasi | Laptop RTX 4060, terminal Ubuntu WSL2 | [Panduan training GPU](docs/TRAINING_GPU_WINDOWS.md) |
+| Uji hasil model pada gambar | Windows, CPU cukup | `scripts/cv.ps1 setup-inference` |
 
-> `firmware/esp32-gate/` dan `shared/contracts/` adalah lokasi kerja yang direncanakan dan perlu dibuat saat implementasinya dimulai.
+Tidak perlu kamera untuk tahap training maupun pengujian file gambar ini.
 
-## Alur sistem
+## Dataset
 
-1. Kendaraan datang ke gate awal dan berhenti di atas load cell.
-2. ESP32 membaca berat sampai stabil dan mengirimkannya ke backend.
-3. Operator memilih jenis dan warna kendaraan melalui web.
-4. Backend memvalidasi data, membuat `queue_id`, dan menyimpan kendaraan.
-5. Backend mengirim perintah kepada ESP32 untuk membuka servo gate.
-6. Kendaraan masuk ke parkiran dan statusnya menjadi `waiting`.
-7. Operator memasukkan batas jumlah dan berat feri melalui web.
-8. Sistem cerdas memilih kendaraan berdasarkan antrean dan kapasitas feri.
-9. Kendaraan terpilih mendapatkan status `allowed_to_board`.
-10. Kamera di parkiran memantau kendaraan yang melewati jalur masuk feri.
-11. Backend mencocokkan event kamera dengan daftar kendaraan yang diizinkan.
-12. Kendaraan yang terkonfirmasi masuk feri mendapatkan status `boarded`.
-
-```mermaid
-flowchart LR
-    A[Kendaraan datang] --> B[Load cell membaca berat]
-    B --> C[Operator mengisi jenis dan warna]
-    C --> D[Backend membuat queue_id]
-    D --> E[Servo gate terbuka]
-    E --> F[Kendaraan menunggu di parkiran]
-    F --> G[Sistem memilih sesuai kapasitas feri]
-    G --> H[Daftar kendaraan yang boleh boarding]
-    H --> I[Kamera memantau jalur masuk feri]
-    I --> J[Backend mencocokkan kendaraan]
-    J --> K[Status boarded]
-```
-
-## Cara kerja setiap komponen
-
-### Computer Vision
-
-- Kamera hanya berada di parkiran dekat jalur masuk kapal feri.
-- Sistem mendeteksi jenis dan warna kendaraan sebagai bantuan pencocokan.
-- Tracking dan virtual line digunakan agar satu kendaraan hanya dihitung satu kali.
-- Computer Vision hanya mengirim event pengamatan dan tidak menentukan izin boarding.
-
-### Sistem tertanam
-
-- Load cell dan HX711 menghasilkan berat dalam kilogram.
-- ESP32 menunggu sampai pembacaan berat stabil sebelum mengirim data.
-- Servo hanya bergerak setelah menerima perintah valid dari backend.
-- Jika sensor, Wi-Fi, atau backend bermasalah, gate harus berada dalam kondisi aman atau tertutup.
-
-### Backend dan sistem cerdas
-
-- Backend menjadi sumber utama data dan status kendaraan.
-- Sistem menyimpan berat, jenis, warna, waktu masuk, nomor antrean, dan riwayat status.
-- Pemilihan kendaraan mempertimbangkan urutan antrean, batas jumlah, dan total berat feri.
-- Setiap keputusan harus memiliki alasan dan tidak boleh melebihi kapasitas feri.
-- Event duplikat dan perintah gate harus ditangani secara idempotent.
-
-### Web monitoring
-
-- Operator melihat berat realtime dan mengisi jenis serta warna kendaraan.
-- Web menampilkan antrean parkiran, kendaraan yang diizinkan, dan kendaraan yang sudah boarding.
-- Web menyediakan input kapasitas feri dan penyelesaian manual ketika hasil kamera ambigu.
-- Web hanya berkomunikasi dengan backend melalui REST API dan WebSocket.
-
-## Status kendaraan
-
-| Status | Keterangan |
-| --- | --- |
-| `weighing` | Kendaraan sedang ditimbang |
-| `registered` | Berat, jenis, dan warna sudah tersimpan |
-| `waiting` | Kendaraan menunggu di parkiran |
-| `allowed_to_board` | Kendaraan diizinkan masuk feri |
-| `boarded` | Kendaraan terkonfirmasi masuk feri |
-| `hold` | Kendaraan ditahan atau perlu pemeriksaan |
-| `cancelled` | Pencatatan kendaraan dibatalkan |
-
-## Struktur repository
+Salin hasil LabelImg format YOLO ke `data/raw/vehicles/`:
 
 ```text
-ferqueue/
-├── apps/
-│   ├── backend/             # Backend dan sistem cerdas
-│   ├── computer-vision/     # Deteksi dan tracking kendaraan
-│   └── web-monitoring/      # Dashboard operator
-├── firmware/
-│   └── esp32-gate/          # Firmware ESP32, load cell, dan servo
-├── shared/
-│   └── contracts/           # Kontrak payload/API lintas komponen
-├── data/                    # Dataset lokal
-├── models/
-│   └── mobilenet/           # Model Computer Vision lokal
-└── scripts/                 # Script pengujian dan development
+data/raw/vehicles/
+  classes.txt
+  mobil-001.jpg
+  mobil-001.txt
+  truk-001.jpg
+  truk-001.txt
 ```
 
-## Aturan integrasi
+Gunakan `classes.txt` asli; urutan kelas harus sama dengan saat labeling. Panduan format folder, kelompok video, dan pemeriksaan label: [panduan PCV](apps/computer-vision/README.md).
 
-- Backend menjadi pusat komunikasi; web, ESP32, dan Computer Vision tidak berkomunikasi langsung satu sama lain.
-- Gunakan `queue_id` sebagai identitas utama kendaraan.
-- Gunakan UUID untuk event dan perintah.
-- Gunakan waktu ISO 8601 UTC dan berat dalam kilogram.
-- Retry harus memakai ID yang sama agar tidak membuat data duplikat.
-- Perubahan kontrak data harus dibahas bersama sebelum diterapkan.
-- Dataset, model besar, password Wi-Fi, token, dan kredensial tidak boleh dimasukkan ke Git.
+Di Windows, pasang Python 3.11 64-bit, lalu dari root repo:
 
-## Kondisi saat ini
+```powershell
+.\scripts\cv.ps1 setup-data
+.\scripts\cv.ps1 test
+.\scripts\cv.ps1 prepare
+```
 
-Repository masih berada pada tahap scaffold awal. Struktur folder utama sudah tersedia, tetapi implementasi backend, Computer Vision, firmware, web, kontrak data, spesifikasi perangkat, model final, dan aturan kapasitas masih perlu dikerjakan serta diuji bersama.
+Environment ini hanya memasang Pillow untuk pengolahan dataset. Bawa dataset asli serta folder `data/processed/vehicles-v1/` ke laptop training dengan susunan folder yang sama; manifest menggunakan path relatif sehingga bisa dipindahkan. Bila belum melakukan prepare, laptop training dapat menjalankannya sendiri.
+
+## Training pada laptop RTX 4060
+
+Ikuti [setup Windows + WSL2](docs/TRAINING_GPU_WINDOWS.md) sekali. Lalu, **jalankan di terminal Ubuntu WSL2 dari root repo**:
+
+```bash
+bash scripts/cv.sh setup
+bash scripts/cv.sh check --require-gpu
+bash scripts/cv.sh test
+# Hanya jika manifest belum disiapkan:
+bash scripts/cv.sh prepare
+bash scripts/cv.sh train
+bash scripts/cv.sh export
+```
+
+**`bash scripts/cv.sh train` adalah perintah yang melatih dataset.** Proses berhenti jika TensorFlow tidak dapat memakai GPU. Pengaturan ada di `configs/training.json`.
+
+Sesudah training selesai, evaluasi pada data test dan kemas model:
+
+```bash
+bash scripts/cv.sh evaluate --split test
+bash scripts/cv.sh package-model --archive outputs/ssd-model.zip
+```
+
+Pembagian data hanya **80% train dan 20% test**, diatur oleh `train_ratio` dan `test_ratio` pada `configs/training.json`. Pembagian mengikuti kelompok/sesi gambar. Jika pernah menyiapkan manifest dengan tiga bagian, gunakan `prepared_dir` dan `run_dir` baru, lalu jalankan `prepare` lagi; manifest lama tidak ditimpa.
+
+Paket ZIP berisi model untuk prediksi, kelas, dan identitas checkpoint; tidak membawa gambar training, TFRecord, atau environment CUDA.
+
+## Menguji gambar di Windows
+
+Salin `ssd-model.zip` dari teman ke `outputs/ssd-model.zip`. Di PowerShell:
+
+```powershell
+.\scripts\cv.ps1 setup-data
+.\scripts\cv.ps1 import-model -Archive outputs/ssd-model.zip
+.\scripts\cv.ps1 setup-inference
+.\scripts\cv.ps1 check
+# Masukkan gambar JPG/PNG baru ke data/inference/, lalu:
+.\scripts\cv.ps1 predict
+```
+
+Hasil bounding box, kelas, confidence, dan JSON disimpan di `outputs/predictions/`. Prediksi Windows memakai CPU; environment TensorFlow dipasang hanya jika anggota tersebut memang perlu menjalankan model. Untuk laptop yang sangat terbatas, prediksi juga dapat dilakukan di laptop RTX 4060 lalu file hasilnya dibagikan.
+
+## Struktur utama
+
+| Lokasi | Isi |
+| --- | --- |
+| `apps/computer-vision/` | Validasi YOLO, training, evaluasi, prediksi, dan tes |
+| `scripts/cv.ps1` | Persiapan dataset dan prediksi di Windows |
+| `scripts/cv.sh` | Training/evaluasi GPU di WSL2 |
+| `scripts/setup_cv.py` | Menyiapkan sumber TensorFlow yang dipatok versinya |
+| `configs/training.json` | Lokasi dataset, folder eksperimen, dan parameter |
+| `data/raw/vehicles/` | Dataset asli, tidak masuk Git |
+| `data/processed/vehicles-v1/` | Manifest split yang dibekukan |
+| `models/mobilenet/runs/ssd-v2-001/` | Checkpoint, model ekspor, dan laporan |
+| `outputs/` | Prediksi dan paket model |
+
+Folder `.venv-data`, `.venv-training`, `.venv-tools`, `.venv-inference`, dan `.cache` merupakan file lokal; tidak ikut Git dan tidak perlu dibagikan ke anggota lain.
+
+## PostgreSQL dan integrasi selanjutnya
+
+PostgreSQL dipasang langsung di Windows menggunakan installer resmi dan dikelola melalui pgAdmin. Buat user/database `ferqueue`, lalu isi `DATABASE_URL` pada `.env` sesuai konfigurasi lokal. Contoh disediakan di `.env.example`. Training dan prediksi file tidak memerlukan database.
+
+Backend (`apps/backend/`), web (`apps/web-monitoring/`), dan firmware masih berupa kerangka. Belum ada tabel aplikasi, API integrasi, atau pengiriman hasil prediksi ke database/web.
+
+Pengukuran panjang, lebar, dan tinggi fisik masih membutuhkan modul kalibrasi tersendiri. Prediksi saat ini mengisi dimensi dengan `null` dan status `not_calibrated`; kotak deteksi bukan ukuran 3D. Metode sistem cerdas baru akan mengolah hasil dimensi dan berat sesudah datanya tersedia.

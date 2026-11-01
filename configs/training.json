@@ -1,0 +1,12 @@
+{
+  "dataset_dir": "data/raw/vehicles",
+  "prepared_dir": "data/processed/vehicles-v1",
+  "run_dir": "models/mobilenet/runs/ssd-v2-001",
+  "seed": 42,
+  "train_ratio": 0.7,
+  "test_ratio": 0.3,
+  "batch_size": 4,
+  "num_steps": 3000,
+  "learning_rate": 0.004,
+  "confidence_threshold": 0.5
+}

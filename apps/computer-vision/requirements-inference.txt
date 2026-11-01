@@ -1,0 +1,4 @@
+# Optional Windows CPU inference. No Object Detection API or CUDA installation.
+tensorflow==2.15.1
+numpy==1.26.4
+Pillow==10.4.0
