@@ -64,6 +64,8 @@ bash scripts/cv.sh package-model --archive outputs/ssd-model.zip
 
 Pembagian data hanya **80% train dan 20% test**, diatur oleh `train_ratio` dan `test_ratio` pada `configs/training.json`. Pembagian mengikuti kelompok/sesi gambar. Jika pernah menyiapkan manifest dengan tiga bagian, gunakan `prepared_dir` dan `run_dir` baru, lalu jalankan `prepare` lagi; manifest lama tidak ditimpa.
 
+Jika `prepare` menemukan banyak gambar tanpa label atau duplikat, jalankan `bash scripts/cv.sh clean-dataset` (Windows: `.\scripts\cv.ps1 clean-dataset`). Buka laporan lengkap yang ditampilkan, lalu ketik `y` di terminal untuk memindahkan seluruh kandidat yang disetujui ke karantina. Lihat [alur review dan pemulihan dataset](scripts/README.md#review-dan-bersihkan-dataset-sebelum-prepare).
+
 Paket ZIP berisi model untuk prediksi, kelas, dan identitas checkpoint; tidak membawa gambar training, TFRecord, atau environment CUDA.
 
 ## Menguji gambar di Windows

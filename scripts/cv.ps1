@@ -1,13 +1,14 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0, Mandatory = $true)]
-    [ValidateSet('setup-data', 'setup-inference', 'prepare', 'predict', 'check', 'test', 'import-model', 'train', 'export', 'evaluate')]
+    [ValidateSet('setup-data', 'setup-inference', 'prepare', 'clean-dataset', 'predict', 'check', 'test', 'import-model', 'train', 'export', 'evaluate')]
     [string]$Action,
     [string]$Config = 'configs/training.json',
     [Alias('Input')][string]$Images = 'data/inference',
     [string]$Output = 'outputs/predictions',
     [string]$Archive = 'outputs/ssd-model.zip',
-    [string]$Python
+    [string]$Python,
+    [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -64,6 +65,7 @@ try {
     if ($previousPythonPath) { $env:PYTHONPATH += [IO.Path]::PathSeparator + $previousPythonPath }
     $cliAction = if ($Action -eq 'check') { 'check-inference' } else { $Action }
     $cliArgs = @($cliAction, '--config', $Config)
+    if ($DryRun) { $cliArgs += '--dry-run' }
     if ($Action -eq 'predict') { $cliArgs += @('--input', $Images, '--output', $Output) }
     if ($Action -eq 'import-model') { $cliArgs += @('--archive', $Archive) }
     & $pythonExe -m ferqueue_cv @cliArgs

@@ -35,13 +35,14 @@ def load_config(path, root):
 
 def main():
     parser = argparse.ArgumentParser(description='Training deteksi kendaraan dari gambar LabelImg YOLO.')
-    parser.add_argument('action', choices=['check', 'check-inference', 'prepare', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
+    parser.add_argument('action', choices=['check', 'check-inference', 'prepare', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
     parser.add_argument('--config', default='configs/training.json')
     parser.add_argument('--input', default='data/inference')
     parser.add_argument('--output', default='outputs/predictions')
     parser.add_argument('--split', choices=['test'], default='test')
     parser.add_argument('--require-gpu', action='store_true')
     parser.add_argument('--archive', default='outputs/ssd-model.zip')
+    parser.add_argument('--dry-run', action='store_true', help='clean-dataset: buat laporan saja, tanpa pertanyaan atau perubahan dataset.')
     args = parser.parse_args()
     root = Path.cwd().resolve()
     configure_sources(root)
@@ -53,6 +54,9 @@ def main():
         if args.action == 'test':
             subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                             'apps/computer-vision/tests', '-v'], check=True)
+        elif args.action == 'clean-dataset':
+            from .cleanup import clean_dataset
+            clean_dataset(config, root, dry_run=args.dry_run)
         elif args.action == 'prepare':
             from .dataset import prepare
             manifest, summary = prepare(config, root)
@@ -91,7 +95,7 @@ def main():
                 training.evaluate(config, root, args.split)
             else:
                 getattr(training, args.action)(config, root)
-    except (ValueError, FileNotFoundError, KeyError, ImportError, subprocess.CalledProcessError) as error:
+    except (ValueError, OSError, KeyError, ImportError, subprocess.CalledProcessError) as error:
         print(f'GAGAL: {error}', file=sys.stderr)
         return 1
     return 0

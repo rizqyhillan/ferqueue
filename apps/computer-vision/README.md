@@ -32,6 +32,8 @@ Baris label YOLO: `class_id center_x center_y width height`, dengan koordinat di
 
 Setiap gambar JPG/JPEG/PNG harus punya label `.txt`. Gambar background menggunakan label kosong yang dibuat sengaja. Label hilang, kotak tidak valid, ID kelas salah, file rusak, gambar duplikat, serta label tanpa pasangan gambar ditolak. Normalisasi rotasi EXIF sebelum labeling, bukan setelah kotak dibuat.
 
+Jika `prepare` menemukan banyak file tanpa pasangan atau duplikat, jalankan `bash scripts/cv.sh clean-dataset` (Windows: `.\scripts\cv.ps1 clean-dataset`). Perintah ini membuat laporan lengkap dan menunggu input `y` setelah kamu review sebelum memindahkan kandidat ke karantina. Opsi `--dry-run` (PowerShell: `-DryRun`) hanya membuat laporan. Gambar identik dengan anotasi bertentangan tetap disimpan untuk diperiksa; label yang isinya sama pada gambar berbeda tidak dihapus. [Alur review, backup, dan pemulihan](../../scripts/README.md#review-dan-bersihkan-dataset-sebelum-prepare).
+
 ## Pembagian kelompok dan data uji
 
 Untuk frame video atau foto satu kendaraan dalam sesi yang sama, simpan dalam subfolder tingkat pertama yang sama. Kelompok itu tidak akan tersebar antara train dan test.
