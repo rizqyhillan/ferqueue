@@ -72,6 +72,7 @@ def main():
                 raise ValueError('Arsip model harus berada di dalam repo.')
             (package_model if args.action == 'package-model' else import_model)(config, root, archive)
         elif args.action == 'check':
+            subprocess.run([sys.executable, str(root / 'scripts/fix_tf_slim.py'), '--check-only'], check=True)
             import tensorflow as tf
             from object_detection.builders import model_builder
             from object_detection.utils import config_util

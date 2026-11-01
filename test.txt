@@ -1,0 +1,13 @@
+.venv-training/bin/python - <<'PY'
+from importlib.util import find_spec
+from pathlib import Path
+
+p = Path(find_spec("tf_slim").origin).parent / "data/tfexample_decoder.py"
+old = "from tensorflow.python.ops import control_flow_ops"
+new = "from tensorflow.compat import v1 as control_flow_ops"
+
+text = p.read_text()
+assert old in text or new in text, "Format file berbeda; hentikan."
+p.write_text(text.replace(old, new))
+print("Kompatibilitas decoder berhasil diperbaiki.")
+PY

@@ -132,3 +132,16 @@ bash scripts/cv.sh train
 ```
 
 Tidak perlu mengulang prepare atau setup. Pemeriksaan sertifikat SSL tetap aktif.
+
+## Jika decoder tf-slim mengeluhkan fungsi case/cond
+
+`AttributeError: module 'tensorflow.python.ops.control_flow_ops' has no attribute 'case'` berasal dari decoder `tf-slim==1.1.0` yang mengakses API internal TensorFlow lama. Setup FERQUEUE sekarang mengarahkan import decoder tersebut ke API publik `tensorflow.compat.v1`, yang menyediakan `case` dan `cond`.
+
+Sesudah memperbarui file script dari repo, jalankan di Ubuntu dari root proyek:
+
+```bash
+.venv-training/bin/python scripts/fix_tf_slim.py
+bash scripts/cv.sh train
+```
+
+Script perbaikan juga menguji pembacaan JPEG dan PNG di dalam graph TensorFlow. Tidak perlu mengulang prepare atau menghapus dataset, checkpoint, dan environment. Setup akan menerapkan perbaikan lagi jika paket dipasang ulang; perintah `check` ikut menguji decoder gambar.
