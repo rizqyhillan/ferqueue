@@ -120,3 +120,15 @@ bash scripts/cv.sh predict
 ```
 
 Hasil gambar dengan bounding box dan JSON berada di `outputs/predictions/`. Belum ada pengukuran dimensi fisik atau koneksi database/web.
+
+## Jika unduhan model gagal karena sertifikat
+
+Pesan `CERTIFICATE_VERIFY_FAILED` dengan `Hostname mismatch` pada `download.tensorflow.org` berarti unduhan checkpoint terhenti sebelum training. Downloader sekarang menggunakan endpoint HTTPS resmi bucket: `storage.googleapis.com/download.tensorflow.org`.
+
+Perbarui `apps/computer-vision/src/ferqueue_cv/training.py` dari repo terbaru, kemudian ulangi:
+
+```bash
+bash scripts/cv.sh train
+```
+
+Tidak perlu mengulang prepare atau setup. Pemeriksaan sertifikat SSL tetap aktif.

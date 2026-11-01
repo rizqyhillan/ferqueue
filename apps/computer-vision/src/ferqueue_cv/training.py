@@ -13,7 +13,8 @@ from PIL import Image, ImageDraw, ImageOps
 from .dataset import IMAGE_EXTENSIONS, verify_images
 
 MODEL_NAME = 'ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8'
-MODEL_URL = f'https://download.tensorflow.org/models/object_detection/tf2/20200711/{MODEL_NAME}.tar.gz'
+# Use the bucket's canonical HTTPS endpoint; the custom hostname can fail TLS hostname validation.
+MODEL_URL = f'https://storage.googleapis.com/download.tensorflow.org/models/object_detection/tf2/20200711/{MODEL_NAME}.tar.gz'
 
 
 def load_manifest(config, root):
