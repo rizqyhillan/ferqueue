@@ -214,32 +214,36 @@ def evaluate(config, root, split):
     if split != 'test':
         raise ValueError('Evaluasi hanya menggunakan split test.')
     import numpy as np
-    from object_detection.core import standard_fields as fields
-    from object_detection.metrics import coco_evaluation
+    from .coco_metrics import compute_coco_metrics
     detector, frozen, metadata = load_detector(config, root)
     manifest = frozen['manifest']
     if 'splits' not in manifest:
         raise ValueError('Evaluasi berlabel dilakukan di laptop training yang memiliki manifest dan dataset asli.')
     verify_images(manifest, root)
     categories = [{'id': index, 'name': name} for index, name in enumerate(manifest['classes'], 1)]
-    evaluator = coco_evaluation.CocoDetectionEvaluator(categories, include_metrics_per_category=True)
-    inputs, detections = fields.InputDataFields, fields.DetectionResultFields
-    for row in manifest['splits'][split]:
+    groundtruth = {'info': {}, 'images': [], 'annotations': [], 'categories': categories}
+    predictions = []
+    for image_id, row in enumerate(manifest['splits'][split], 1):
         with Image.open(root / row['image']) as source:
             result = detect(detector, source.convert('RGB'))
         scale = np.array([row['height'], row['width'], row['height'], row['width']])
         boxes = np.array([[b['ymin'], b['xmin'], b['ymax'], b['xmax']] for b in row['boxes']], dtype=np.float32).reshape(-1, 4)
-        evaluator.add_single_ground_truth_image_info(row['image'], {
-            inputs.groundtruth_boxes: boxes * scale,
-            inputs.groundtruth_classes: np.array([b['class_id'] for b in row['boxes']], dtype=np.int32),
-            inputs.groundtruth_is_crowd: np.zeros(len(boxes), dtype=bool),
-        })
-        evaluator.add_single_detected_image_info(row['image'], {
-            detections.detection_boxes: result['detection_boxes'] * scale,
-            detections.detection_classes: result['detection_classes'].astype(np.int32),
-            detections.detection_scores: result['detection_scores'],
-        })
-    metrics = {key: float(value) for key, value in evaluator.evaluate().items()}
+        groundtruth['images'].append({'id': image_id, 'file_name': row['image'],
+                                     'width': row['width'], 'height': row['height']})
+        for coordinates, box in zip(boxes * scale, row['boxes']):
+            ymin, xmin, ymax, xmax = map(float, coordinates)
+            width, height = xmax - xmin, ymax - ymin
+            groundtruth['annotations'].append({
+                'id': len(groundtruth['annotations']) + 1, 'image_id': image_id,
+                'category_id': box['class_id'], 'bbox': [xmin, ymin, width, height],
+                'area': width * height, 'iscrowd': 0,
+            })
+        for coordinates, class_id, score in zip(result['detection_boxes'] * scale,
+                                                 result['detection_classes'], result['detection_scores']):
+            ymin, xmin, ymax, xmax = map(float, coordinates)
+            predictions.append({'image_id': image_id, 'category_id': int(class_id),
+                                'bbox': [xmin, ymin, xmax - xmin, ymax - ymin], 'score': float(score)})
+    metrics = compute_coco_metrics(groundtruth, predictions)
     report = {'split': split, 'checkpoint': metadata['checkpoint'],
               'image_count': len(manifest['splits'][split]), 'metrics': metrics,
               'warnings': manifest['warnings']}

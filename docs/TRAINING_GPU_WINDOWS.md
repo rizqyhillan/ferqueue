@@ -145,3 +145,9 @@ bash scripts/cv.sh train
 ```
 
 Script perbaikan juga menguji pembacaan JPEG dan PNG di dalam graph TensorFlow. Tidak perlu mengulang prepare atau menghapus dataset, checkpoint, dan environment. Setup akan menerapkan perbaikan lagi jika paket dipasang ulang; perintah `check` ikut menguji decoder gambar.
+
+## Jika evaluasi berhenti dengan Category stats do not exist
+
+Pesan ini berasal dari wrapper TensorFlow yang mengharapkan ekstensi `category_stats` di pycocotools. Perhitungan COCO keseluruhan dapat selesai, tetapi laporan gagal disimpan saat wrapper mencoba membaca metrik per kelas.
+
+Perbarui kedua file `apps/computer-vision/src/ferqueue_cv/training.py` dan `apps/computer-vision/src/ferqueue_cv/coco_metrics.py`, kemudian jalankan ulang `bash scripts/cv.sh evaluate`. Evaluasi sekarang menggunakan API pycocotools standar dan mengambil AP per kelas dari tensor precision hasil evaluasi. Model, dataset, serta checkpoint yang sudah ada tetap dipakai; training dan export tidak perlu diulang.
