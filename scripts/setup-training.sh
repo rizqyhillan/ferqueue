@@ -46,4 +46,4 @@ if [[ "$device" == cuda ]]; then
 else
     bash scripts/cv.sh check
 fi
-echo "Environment training $device siap. Setelah dataset lengkap, lanjutkan prepare lalu benchmark/train."
+echo "Environment training $device siap. Setelah dataset lengkap, lanjutkan prepare lalu train."

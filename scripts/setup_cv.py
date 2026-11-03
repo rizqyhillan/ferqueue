@@ -101,7 +101,14 @@ def main():
     try:
         if not args.sources_only:
             requirements = 'requirements-training-cuda.txt' if args.device == 'cuda' else 'requirements-training.txt'
-            subprocess.run([sys.executable, '-m', 'pip', 'install', '-r',
+            uv = root / '.venv-tools/bin/uv'
+            installer = ([str(uv), 'pip', 'install', '--python', sys.executable,
+                          '--cache-dir', str(root / '.cache/uv')]
+                         if uv.is_file() else [sys.executable, '-m', 'pip', 'install'])
+            wheel_cache = root / '.cache/wheels'
+            if wheel_cache.is_dir():
+                installer.extend(['--find-links', str(wheel_cache)])
+            subprocess.run([*installer, '-r',
                             str(root / 'apps/computer-vision' / requirements)], check=True)
             subprocess.run([sys.executable, '-m', 'tensorboard.main', '--version'], check=True)
             subprocess.run([sys.executable, str(root / 'scripts/fix_tf_slim.py')], check=True)

@@ -6,7 +6,6 @@ from pathlib import Path
 import subprocess
 import sys
 import tarfile
-import time
 import urllib.request
 
 from PIL import Image, ImageDraw, ImageOps
@@ -143,8 +142,7 @@ def make_pipeline(config, manifest, pretrained, run):
     (run / 'pipeline.config').write_text(text_format.MessageToString(pipeline), encoding='utf-8')
 
 
-def train(config, root, *, target_steps=None):
-    started = time.perf_counter()
+def train(config, root):
     manifest = load_manifest(config, root)
     run = root / config['run_dir']
     # Store exact inputs so accidentally changed labels/settings cannot resume an old run.
@@ -165,26 +163,10 @@ def train(config, root, *, target_steps=None):
     make_pipeline(config, manifest, pretrained, run)
     (run / 'training').mkdir(exist_ok=True)
     # Official training entry point resumes from the latest checkpoint in model_dir.
-    from .timing import run_measured
-    import tensorflow as tf
-    runtime = {'tensorflow': tf.__version__,
-               'device': 'GPU' if tf.config.get_visible_devices('GPU') else 'CPU'}
-    return run_measured([sys.executable, '-u', '-m', 'object_detection.model_main_tf2',
+    subprocess.run([sys.executable, '-m', 'object_detection.model_main_tf2',
                     f'--pipeline_config_path={run / "pipeline.config"}',
                     f'--model_dir={run / "training"}', f'--num_train_steps={config["num_steps"]}',
-                    '--checkpoint_every_n=100', '--alsologtostderr'],
-                    run, config, time.perf_counter() - started, runtime,
-                    target_steps if target_steps is not None else config['num_steps'])
-
-
-def benchmark(config, root, steps=200):
-    if type(steps) is not int or steps < 200 or steps % 100:
-        raise ValueError('Benchmark memerlukan minimal 200 langkah dan kelipatan 100.')
-    from .timing import attempt_id
-    trial = {**config, 'run_dir': f'outputs/benchmarks/{attempt_id()}', 'num_steps': steps}
-    print(f'Benchmark {steps} langkah, batch {config["batch_size"]}; hasil: {trial["run_dir"]}', flush=True)
-    print('100 langkah pertama untuk warmup; benchmark ini memakai dataset asli dan run terpisah.', flush=True)
-    return train(trial, root, target_steps=config['num_steps'])
+                    '--checkpoint_every_n=100', '--alsologtostderr'], check=True)
 
 
 def export(config, root):

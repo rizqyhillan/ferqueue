@@ -1,6 +1,6 @@
 # PCV: dataset, training, dan prediksi gambar
 
-Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal dan benchmark](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
+Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
 
 ## Dataset yang diterima
 
@@ -89,7 +89,6 @@ bash scripts/cv.sh setup
 bash scripts/cv.sh check
 # Bila belum ada manifest:
 bash scripts/cv.sh prepare
-bash scripts/cv.sh benchmark
 bash scripts/cv.sh train
 bash scripts/cv.sh export
 bash scripts/cv.sh evaluate --split test
@@ -101,7 +100,7 @@ Artefak dalam `run_dir`: `inputs.json` (config + manifest), `label_map.pbtxt`, `
 
 Checkpoint disimpan setiap 100 langkah. Ulangi `train` dengan config/manifest sama untuk resume. Jangan menjalankan dua training pada run yang sama. Parameter/dataset berbeda memerlukan `run_dir` baru. Bila split tetap, jangan membuat ulang pembagian untuk setiap eksperimen.
 
-`benchmark` melatih 200 langkah di run terpisah untuk mengukur waktu; `--steps` harus minimal 200 dan kelipatan 100. Laporan durasi dan log setiap sesi training disimpan di `reports/training-<waktu-id>.json`/`.log`. Estimasi mengabaikan blok 100 langkah awal, persiapan, ekspor, dan evaluasi. Untuk NVIDIA, setup memakai `--device cuda` dan perintah check/benchmark/train memakai `--require-gpu`.
+Untuk NVIDIA, setup memakai `--device cuda` dan perintah check/train memakai `--require-gpu`.
 
 ## Evaluasi
 

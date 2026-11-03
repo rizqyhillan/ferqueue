@@ -95,7 +95,7 @@ bash scripts/cv.sh train --require-gpu
 
 Training mengharuskan GPU; tidak beralih diam-diam ke CPU. Parameter awal di `configs/training.json`: batch size 4, 3000 langkah, learning rate 0.004. Angka tersebut titik awal eksperimen, bukan jaminan akurasi atau hasil tuning untuk RTX 4060.
 
-Checkpoint berada di `<run_dir>/training/`, dengan log dan laporan durasi di `<run_dir>/reports/`. Nilai `run_dir` branch `igpu` adalah `models/mobilenet/runs/ssd-v2-igpu-001`; pilih run baru untuk eksperimen NVIDIA yang berbeda. Jika terputus, ulangi `train --require-gpu` dengan konfigurasi dan manifest yang sama untuk melanjutkan checkpoint terakhir. Untuk parameter baru, gunakan `run_dir` baru; `prepared_dir` boleh sama jika dataset dan split tetap sama.
+Checkpoint dan log TensorBoard berada di `<run_dir>/training/`. Nilai `run_dir` branch `igpu` adalah `models/mobilenet/runs/ssd-v2-igpu-001`; pilih run baru untuk eksperimen NVIDIA yang berbeda. Jika terputus, ulangi `train --require-gpu` dengan konfigurasi dan manifest yang sama untuk melanjutkan checkpoint terakhir. Untuk parameter baru, gunakan `run_dir` baru; `prepared_dir` boleh sama jika dataset dan split tetap sama.
 
 ## 6. Evaluasi dan bagikan hasil
 

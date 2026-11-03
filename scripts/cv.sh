@@ -10,6 +10,16 @@ if [[ ! -x .venv-training/bin/python ]]; then
     echo 'Jalankan bash scripts/cv.sh setup terlebih dahulu di terminal Linux.' >&2
     exit 1
 fi
+.venv-training/bin/python -c '
+import importlib.util
+import sys
+missing = [name for name in ("PIL", "tensorflow") if importlib.util.find_spec(name) is None]
+if missing:
+    print("Environment training belum lengkap: " + ", ".join(missing) + ".", file=sys.stderr)
+    print("Jika setup masih berjalan, tunggu sampai muncul pesan Environment training cpu/cuda siap.", file=sys.stderr)
+    print("Jika setup sudah berhenti/gagal, lanjutkan dengan: bash scripts/cv.sh setup", file=sys.stderr)
+    sys.exit(1)
+'
 export PYTHONPATH="$repo_root/apps/computer-vision/src${PYTHONPATH:+:$PYTHONPATH}"
 export TF_CPP_MIN_LOG_LEVEL=2
 export TF_FORCE_GPU_ALLOW_GROWTH=true

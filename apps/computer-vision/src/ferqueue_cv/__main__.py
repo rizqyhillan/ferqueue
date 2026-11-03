@@ -35,13 +35,12 @@ def load_config(path, root):
 
 def main():
     parser = argparse.ArgumentParser(description='Training deteksi kendaraan dari gambar LabelImg YOLO.')
-    parser.add_argument('action', choices=['check', 'check-inference', 'prepare', 'clean-dataset', 'benchmark', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
+    parser.add_argument('action', choices=['check', 'check-inference', 'prepare', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
     parser.add_argument('--config', default='configs/training.json')
     parser.add_argument('--input', default='data/inference')
     parser.add_argument('--output', default='outputs/predictions')
     parser.add_argument('--split', choices=['test'], default='test')
     parser.add_argument('--require-gpu', action='store_true')
-    parser.add_argument('--steps', type=int, default=200, help='benchmark: jumlah langkah, minimal 200 dan kelipatan 100.')
     parser.add_argument('--archive', default='outputs/ssd-model.zip')
     parser.add_argument('--dry-run', action='store_true', help='clean-dataset: buat laporan saja, tanpa pertanyaan atau perubahan dataset.')
     args = parser.parse_args()
@@ -49,12 +48,10 @@ def main():
     configure_sources(root)
     try:
         config = load_config(args.config, root)
-        if args.action == 'benchmark' and (args.steps < 200 or args.steps % 100):
-            raise ValueError('Benchmark memerlukan --steps minimal 200 dan kelipatan 100.')
         if args.require_gpu:
             from .runtime import require_gpu
             require_gpu()
-        elif args.action in ('check', 'train', 'benchmark'):
+        elif args.action in ('check', 'train'):
             from .runtime import use_cpu
             use_cpu()
         if args.action == 'test':
@@ -100,8 +97,6 @@ def main():
                 training.predict(config, root, args.input, args.output)
             elif args.action == 'evaluate':
                 training.evaluate(config, root, args.split)
-            elif args.action == 'benchmark':
-                training.benchmark(config, root, args.steps)
             else:
                 getattr(training, args.action)(config, root)
     except (ValueError, OSError, KeyError, ImportError, subprocess.CalledProcessError) as error:

@@ -14,19 +14,17 @@ bash scripts/cv.sh check
 bash scripts/cv.sh test
 # Hanya jika manifest belum ada:
 bash scripts/cv.sh prepare
-# Uji waktu 200 langkah sebelum training penuh:
-bash scripts/cv.sh benchmark
 bash scripts/cv.sh train
 ```
 
-Benchmark memakai dataset asli, batch 4, dan folder baru di `outputs/benchmarks/`. Hasilnya mencakup detik/langkah, gambar/detik, serta perkiraan 3.000 dan 6.000 langkah. Seratus langkah awal dikeluarkan dari estimasi untuk mengurangi pengaruh warmup. Log dan laporan JSON disimpan untuk setiap percobaan, termasuk training penuh dan resume. [Panduan laptop dan pengukuran durasi](docs/TRAINING_LOCAL.md).
+[Panduan training laptop sendiri](docs/TRAINING_LOCAL.md). Tunggu sampai setup menampilkan `Environment training cpu siap` sebelum menjalankan perintah lain.
 
 ## Alur kerja tim
 
 | Pekerjaan | Perangkat | Mulai dari |
 | --- | --- | --- |
 | Labeling, pemeriksaan dan pembagian dataset | Laptop anggota tim, Windows | `scripts/cv.ps1 setup-data` |
-| Training, benchmark, ekspor, dan evaluasi | Laptop sendiri, terminal Linux | [Panduan training lokal](docs/TRAINING_LOCAL.md) |
+| Training, ekspor, dan evaluasi | Laptop sendiri, terminal Linux | [Panduan training lokal](docs/TRAINING_LOCAL.md) |
 | Training NVIDIA (opsional) | Laptop RTX 4060, Ubuntu WSL2 | [Panduan training GPU](docs/TRAINING_GPU_WINDOWS.md) |
 | Uji hasil model pada gambar | Windows, CPU cukup | `scripts/cv.ps1 setup-inference` |
 
@@ -67,7 +65,6 @@ bash scripts/cv.sh check
 bash scripts/cv.sh test
 # Hanya jika manifest belum disiapkan:
 bash scripts/cv.sh prepare
-bash scripts/cv.sh benchmark
 bash scripts/cv.sh train
 bash scripts/cv.sh export
 ```
@@ -109,7 +106,7 @@ Hasil bounding box, kelas, confidence, dan JSON disimpan di `outputs/predictions
 | `apps/computer-vision/` | Validasi YOLO, training, evaluasi, prediksi, dan tes |
 | `apps/web-monitoring/` | Dashboard pemeriksaan kamera, berat, golongan, dan tiket masuk |
 | `scripts/cv.ps1` | Persiapan dataset dan prediksi di Windows |
-| `scripts/cv.sh` | Benchmark, training, dan evaluasi Linux/WSL2 |
+| `scripts/cv.sh` | Training dan evaluasi Linux/WSL2 |
 | `scripts/setup_cv.py` | Menyiapkan sumber TensorFlow yang dipatok versinya |
 | `configs/training.json` | Lokasi dataset, folder eksperimen, dan parameter |
 | `data/raw/vehicles/` | Dataset asli, tidak masuk Git |

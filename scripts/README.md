@@ -37,7 +37,6 @@ bash scripts/cv.sh setup
 bash scripts/cv.sh check
 bash scripts/cv.sh test
 bash scripts/cv.sh prepare
-bash scripts/cv.sh benchmark
 bash scripts/cv.sh train
 bash scripts/cv.sh export
 bash scripts/cv.sh evaluate --split test
@@ -47,9 +46,9 @@ bash scripts/cv.sh package-model --archive outputs/ssd-model.zip
 
 Semua opsi CLI diteruskan melalui `cv.sh`, misalnya `--config configs/eksperimen.json`. Evaluasi memakai test secara default, sehingga cukup menjalankan `bash scripts/cv.sh evaluate`. Jangan jalankan `prepare` lagi jika manifest sudah ada. Untuk mengganti manifest tiga bagian yang lama, pilih `prepared_dir` dan `run_dir` baru sebelum prepare.
 
-`benchmark` mengukur 200 langkah pada run baru di `outputs/benchmarks/`, mengabaikan 100 langkah awal untuk estimasi waktu 3.000/6.000 langkah. Gunakan `--steps 500` untuk pengukuran lebih lama. Training penuh dan benchmark menyimpan log serta laporan durasi JSON di folder `reports/` run masing-masing. Default training memakai CPU, dengan 6 thread intra-op dan 2 inter-op. [Panduan training lokal](../docs/TRAINING_LOCAL.md).
+Default training memakai CPU, dengan 6 thread intra-op dan 2 inter-op. Tunggu pesan `Environment training cpu siap` dari setup sebelum menjalankan perintah lain. [Panduan training lokal](../docs/TRAINING_LOCAL.md).
 
-Untuk laptop NVIDIA, gunakan `bash scripts/cv.sh setup --device cuda`, lalu tambahkan `--require-gpu` saat `check`, `benchmark`, dan `train`. [Panduan training GPU Windows](../docs/TRAINING_GPU_WINDOWS.md). PowerShell tetap digunakan untuk persiapan dataset dan prediksi; training dijalankan dari Linux.
+Untuk laptop NVIDIA, gunakan `bash scripts/cv.sh setup --device cuda`, lalu tambahkan `--require-gpu` saat `check` dan `train`. [Panduan training GPU Windows](../docs/TRAINING_GPU_WINDOWS.md). PowerShell tetap digunakan untuk persiapan dataset dan prediksi; training dijalankan dari Linux.
 
 ## Review dan bersihkan dataset sebelum prepare
 
