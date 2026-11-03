@@ -1,6 +1,6 @@
 # PCV: dataset, training, dan prediksi gambar
 
-Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg. Kamera tidak diperlukan. Semua training dilakukan di laptop Windows dengan RTX 4060 melalui [Ubuntu WSL2](../../docs/TRAINING_GPU_WINDOWS.md).
+Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal dan benchmark](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
 
 ## Dataset yang diterima
 
@@ -49,7 +49,7 @@ frame-100.jpg,rekaman-02
 
 Nama gambar relatif terhadap folder `images/` bila ada; jika tidak, relatif terhadap `data/raw/vehicles/`. Tanpa folder/CSV, setiap gambar flat dianggap independen. Script tidak dapat mengetahui sendiri apakah dua foto menampilkan kendaraan yang sama.
 
-Perlu minimal dua kelompok independen untuk membuat split train/test, tetapi jumlah itu saja belum cukup untuk menilai kualitas model. Default sekitar 80% train dan 20% test berdasarkan kelompok; jumlah gambar bisa berbeda karena ukuran kelompok tidak sama.
+Perlu minimal dua kelompok independen untuk membuat split train/test, tetapi jumlah itu saja belum cukup untuk menilai kualitas model. Konfigurasi saat ini sekitar 70% train dan 30% test berdasarkan kelompok; jumlah gambar bisa berbeda karena ukuran kelompok tidak sama.
 
 ## Validasi ringan di Windows
 
@@ -71,24 +71,25 @@ Edit `configs/training.json`:
 | --- | --- | --- |
 | `dataset_dir` | `data/raw/vehicles` | Dataset asli |
 | `prepared_dir` | `data/processed/vehicles-v1` | Manifest pembagian |
-| `run_dir` | `models/mobilenet/runs/ssd-v2-001` | Satu eksperimen/model |
-| `train_ratio` | 0.8 | Proporsi kelompok training |
-| `test_ratio` | 0.2 | Proporsi kelompok test; jumlah kedua rasio harus 1 |
+| `run_dir` | `models/mobilenet/runs/ssd-v2-igpu-001` | Satu eksperimen/model |
+| `train_ratio` | 0.7 | Proporsi kelompok training |
+| `test_ratio` | 0.3 | Proporsi kelompok test; jumlah kedua rasio harus 1 |
 | `batch_size` | 4 | Gambar per langkah |
 | `num_steps` | 3000 | Jumlah langkah, bukan epoch |
 | `learning_rate` | 0.004 | Nilai awal fine-tuning |
 | `seed` | 42 | Pembagian kelompok, bukan jaminan determinisme training GPU |
 | `confidence_threshold` | 0.5 | Ambang tampilan prediksi |
 
-## Training di laptop NVIDIA
+## Training di laptop sendiri
 
-Dari root repo dalam Ubuntu WSL2:
+Dari root repo dalam Linux native:
 
 ```bash
 bash scripts/cv.sh setup
-bash scripts/cv.sh check --require-gpu
+bash scripts/cv.sh check
 # Bila belum ada manifest:
 bash scripts/cv.sh prepare
+bash scripts/cv.sh benchmark
 bash scripts/cv.sh train
 bash scripts/cv.sh export
 bash scripts/cv.sh evaluate --split test
@@ -99,6 +100,8 @@ Transfer learning memakai checkpoint COCO resmi. Script membuat TFRecord, label 
 Artefak dalam `run_dir`: `inputs.json` (config + manifest), `label_map.pbtxt`, `pipeline.config`, `records/`, `training/`, `exports/`, `export.json`, dan `reports/`.
 
 Checkpoint disimpan setiap 100 langkah. Ulangi `train` dengan config/manifest sama untuk resume. Jangan menjalankan dua training pada run yang sama. Parameter/dataset berbeda memerlukan `run_dir` baru. Bila split tetap, jangan membuat ulang pembagian untuk setiap eksperimen.
+
+`benchmark` melatih 200 langkah di run terpisah untuk mengukur waktu; `--steps` harus minimal 200 dan kelipatan 100. Laporan durasi dan log setiap sesi training disimpan di `reports/training-<waktu-id>.json`/`.log`. Estimasi mengabaikan blok 100 langkah awal, persiapan, ekspor, dan evaluasi. Untuk NVIDIA, setup memakai `--device cuda` dan perintah check/benchmark/train memakai `--require-gpu`.
 
 ## Evaluasi
 

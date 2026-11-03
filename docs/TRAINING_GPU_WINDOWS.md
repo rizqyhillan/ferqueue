@@ -57,7 +57,7 @@ Pastikan tersedia:
 Dari root repo di Ubuntu:
 
 ```bash
-bash scripts/cv.sh setup
+bash scripts/cv.sh setup --device cuda
 ```
 
 Setup akan:
@@ -90,12 +90,12 @@ bash scripts/cv.sh prepare
 Baca `data/processed/vehicles-v1/summary.json`. Kemudian:
 
 ```bash
-bash scripts/cv.sh train
+bash scripts/cv.sh train --require-gpu
 ```
 
 Training mengharuskan GPU; tidak beralih diam-diam ke CPU. Parameter awal di `configs/training.json`: batch size 4, 3000 langkah, learning rate 0.004. Angka tersebut titik awal eksperimen, bukan jaminan akurasi atau hasil tuning untuk RTX 4060.
 
-Checkpoint dan log berada di `models/mobilenet/runs/ssd-v2-001/training/`. Jika terputus, ulangi `train` dengan konfigurasi dan manifest yang sama untuk melanjutkan checkpoint terakhir. Untuk parameter baru, gunakan `run_dir` baru; `prepared_dir` boleh sama jika dataset dan split tetap sama.
+Checkpoint berada di `<run_dir>/training/`, dengan log dan laporan durasi di `<run_dir>/reports/`. Nilai `run_dir` branch `igpu` adalah `models/mobilenet/runs/ssd-v2-igpu-001`; pilih run baru untuk eksperimen NVIDIA yang berbeda. Jika terputus, ulangi `train --require-gpu` dengan konfigurasi dan manifest yang sama untuk melanjutkan checkpoint terakhir. Untuk parameter baru, gunakan `run_dir` baru; `prepared_dir` boleh sama jika dataset dan split tetap sama.
 
 ## 6. Evaluasi dan bagikan hasil
 
@@ -103,7 +103,7 @@ Checkpoint dan log berada di `models/mobilenet/runs/ssd-v2-001/training/`. Jika 
 bash scripts/cv.sh export
 ```
 
-Ekspor memakai checkpoint terbaru. Dataset hanya dibagi menjadi train (80%) dan test (20%), dengan rasio yang dapat diubah di `configs/training.json`. Sesudah training selesai, evaluasi pada test dan kemas model:
+Ekspor memakai checkpoint terbaru. Konfigurasi saat ini membagi dataset menjadi train (70%) dan test (30%), dengan rasio yang dapat diubah di `configs/training.json`. Manifest yang sudah ada tetap memakai split yang dibekukan. Sesudah training selesai, evaluasi pada test dan kemas model:
 
 ```bash
 bash scripts/cv.sh evaluate --split test
@@ -128,7 +128,7 @@ Pesan `CERTIFICATE_VERIFY_FAILED` dengan `Hostname mismatch` pada `download.tens
 Perbarui `apps/computer-vision/src/ferqueue_cv/training.py` dari repo terbaru, kemudian ulangi:
 
 ```bash
-bash scripts/cv.sh train
+bash scripts/cv.sh train --require-gpu
 ```
 
 Tidak perlu mengulang prepare atau setup. Pemeriksaan sertifikat SSL tetap aktif.
@@ -141,7 +141,7 @@ Sesudah memperbarui file script dari repo, jalankan di Ubuntu dari root proyek:
 
 ```bash
 .venv-training/bin/python scripts/fix_tf_slim.py
-bash scripts/cv.sh train
+bash scripts/cv.sh train --require-gpu
 ```
 
 Script perbaikan juga menguji pembacaan JPEG dan PNG di dalam graph TensorFlow. Tidak perlu mengulang prepare atau menghapus dataset, checkpoint, dan environment. Setup akan menerapkan perbaikan lagi jika paket dipasang ulang; perintah `check` ikut menguji decoder gambar.
@@ -160,7 +160,7 @@ Untuk memperbaiki environment yang sudah ada, jalankan dari root repo di Ubuntu:
 
 ```bash
 .venv-training/bin/python -m pip install "setuptools==80.9.0"
-.venv-training/bin/python -m tensorboard.main --logdir models/mobilenet/runs/ssd-v2-001/training --host 127.0.0.1 --port 6006
+.venv-training/bin/python -m tensorboard.main --logdir models/mobilenet/runs/ssd-v2-igpu-001/training --host 127.0.0.1 --port 6006
 ```
 
 Buka `http://localhost:6006` di browser Windows. Model dan log training yang sudah ada tetap digunakan.
@@ -179,10 +179,10 @@ Hasil pembandingan bobot belum membuktikan kualitas generalisasi. Prediksi conto
 
 ## Percobaan 6000 langkah
 
-`configs/training-6000.json` memakai dataset dan manifest pembagian yang sama, dengan `num_steps: 6000` dan folder hasil terpisah `models/mobilenet/runs/ssd-v2-6000`. Nilai awal lain mengikuti konfigurasi 3000 langkah. Percobaan dimulai dari checkpoint pretrained COCO; hasil 3000 langkah tetap tersimpan. Seed yang ada mengatur pembagian kelompok, sehingga bobot awal head dan perhitungan GPU belum dijamin identik antarpercobaan.
+`configs/training-6000.json` memakai dataset dan manifest pembagian yang sama, dengan `num_steps: 6000` dan folder hasil terpisah `models/mobilenet/runs/ssd-v2-igpu-6000` pada branch ini. Nilai awal lain mengikuti konfigurasi 3000 langkah. Percobaan dimulai dari checkpoint pretrained COCO; hasil 3000 langkah tetap tersimpan. Seed yang ada mengatur pembagian kelompok, sehingga bobot awal head dan perhitungan GPU belum dijamin identik antarpercobaan.
 
 ```bash
-bash scripts/cv.sh train --config configs/training-6000.json
+bash scripts/cv.sh train --require-gpu --config configs/training-6000.json
 bash scripts/cv.sh export --config configs/training-6000.json
 bash scripts/cv.sh evaluate --config configs/training-6000.json
 ```

@@ -2,14 +2,32 @@
 
 Computer vision kendaraan menggunakan **SSD MobileNet V2 FPNLite 320×320**, dengan rencana integrasi hasil PCV dan berat load cell melalui backend, PostgreSQL, dan web. Metode sistem cerdas masih akan dibandingkan, belum ditetapkan.
 
-## Cara kerja tim sekarang
+## Training pada laptop sendiri (branch `igpu`)
 
-Seluruh training dilakukan pada **satu laptop Windows 10/11 dengan NVIDIA RTX 4060**, melalui Ubuntu WSL2 dan environment Python. Laptop anggota lain tidak perlu memasang environment training. Tidak ada kebutuhan Docker atau layanan cloud untuk alur ini.
+Branch ini disiapkan untuk **Linux native pada Ryzen 5 PRO 5675U (6 core/12 thread), Radeon terintegrasi, RAM sekitar 16 GB**. SSD MobileNet V2 tetap dilatih memakai **CPU**. Paket TensorFlow 2.15.1 proyek ini tidak memakai Radeon iGPU tersebut; nama branch `igpu` tidak berarti akselerasi iGPU sudah aktif. Setup default tidak memasang library CUDA.
+
+Setelah seluruh dataset selesai disalin ke `data/raw/vehicles/`, jalankan dari root repo:
+
+```bash
+bash scripts/cv.sh setup
+bash scripts/cv.sh check
+bash scripts/cv.sh test
+# Hanya jika manifest belum ada:
+bash scripts/cv.sh prepare
+# Uji waktu 200 langkah sebelum training penuh:
+bash scripts/cv.sh benchmark
+bash scripts/cv.sh train
+```
+
+Benchmark memakai dataset asli, batch 4, dan folder baru di `outputs/benchmarks/`. Hasilnya mencakup detik/langkah, gambar/detik, serta perkiraan 3.000 dan 6.000 langkah. Seratus langkah awal dikeluarkan dari estimasi untuk mengurangi pengaruh warmup. Log dan laporan JSON disimpan untuk setiap percobaan, termasuk training penuh dan resume. [Panduan laptop dan pengukuran durasi](docs/TRAINING_LOCAL.md).
+
+## Alur kerja tim
 
 | Pekerjaan | Perangkat | Mulai dari |
 | --- | --- | --- |
 | Labeling, pemeriksaan dan pembagian dataset | Laptop anggota tim, Windows | `scripts/cv.ps1 setup-data` |
-| Training, ekspor, dan evaluasi | Laptop RTX 4060, terminal Ubuntu WSL2 | [Panduan training GPU](docs/TRAINING_GPU_WINDOWS.md) |
+| Training, benchmark, ekspor, dan evaluasi | Laptop sendiri, terminal Linux | [Panduan training lokal](docs/TRAINING_LOCAL.md) |
+| Training NVIDIA (opsional) | Laptop RTX 4060, Ubuntu WSL2 | [Panduan training GPU](docs/TRAINING_GPU_WINDOWS.md) |
 | Uji hasil model pada gambar | Windows, CPU cukup | `scripts/cv.ps1 setup-inference` |
 
 Tidak perlu kamera untuk tahap training maupun pengujian file gambar ini.
@@ -39,21 +57,22 @@ Di Windows, pasang Python 3.11 64-bit, lalu dari root repo:
 
 Environment ini hanya memasang Pillow untuk pengolahan dataset. Bawa dataset asli serta folder `data/processed/vehicles-v1/` ke laptop training dengan susunan folder yang sama; manifest menggunakan path relatif sehingga bisa dipindahkan. Bila belum melakukan prepare, laptop training dapat menjalankannya sendiri.
 
-## Training pada laptop RTX 4060
+## Training dan hasil model
 
-Ikuti [setup Windows + WSL2](docs/TRAINING_GPU_WINDOWS.md) sekali. Lalu, **jalankan di terminal Ubuntu WSL2 dari root repo**:
+Jalankan di terminal Linux dari root repo:
 
 ```bash
 bash scripts/cv.sh setup
-bash scripts/cv.sh check --require-gpu
+bash scripts/cv.sh check
 bash scripts/cv.sh test
 # Hanya jika manifest belum disiapkan:
 bash scripts/cv.sh prepare
+bash scripts/cv.sh benchmark
 bash scripts/cv.sh train
 bash scripts/cv.sh export
 ```
 
-**`bash scripts/cv.sh train` adalah perintah yang melatih dataset.** Proses berhenti jika TensorFlow tidak dapat memakai GPU. Pengaturan ada di `configs/training.json`.
+**`bash scripts/cv.sh train` melatih dataset selama 3.000 langkah di CPU.** Pengaturan ada di `configs/training.json`. Untuk eksperimen 6.000 langkah, gunakan `bash scripts/cv.sh train --config configs/training-6000.json`; run-nya terpisah. NVIDIA tetap dapat digunakan dengan setup `--device cuda` dan training `--require-gpu`.
 
 Sesudah training selesai, evaluasi pada data test dan kemas model:
 
@@ -62,7 +81,7 @@ bash scripts/cv.sh evaluate --split test
 bash scripts/cv.sh package-model --archive outputs/ssd-model.zip
 ```
 
-Pembagian data hanya **80% train dan 20% test**, diatur oleh `train_ratio` dan `test_ratio` pada `configs/training.json`. Pembagian mengikuti kelompok/sesi gambar. Jika pernah menyiapkan manifest dengan tiga bagian, gunakan `prepared_dir` dan `run_dir` baru, lalu jalankan `prepare` lagi; manifest lama tidak ditimpa.
+Pembagian data hanya **70% train dan 30% test**, diatur oleh `train_ratio` dan `test_ratio` pada `configs/training.json`. Pembagian mengikuti kelompok/sesi gambar. Jika pernah menyiapkan manifest dengan tiga bagian, gunakan `prepared_dir` dan `run_dir` baru, lalu jalankan `prepare` lagi; manifest lama tidak ditimpa.
 
 Jika `prepare` menemukan banyak gambar tanpa label atau duplikat, jalankan `bash scripts/cv.sh clean-dataset` (Windows: `.\scripts\cv.ps1 clean-dataset`). Buka laporan lengkap yang ditampilkan, lalu ketik `y` di terminal untuk memindahkan seluruh kandidat yang disetujui ke karantina. Lihat [alur review dan pemulihan dataset](scripts/README.md#review-dan-bersihkan-dataset-sebelum-prepare).
 
@@ -90,12 +109,12 @@ Hasil bounding box, kelas, confidence, dan JSON disimpan di `outputs/predictions
 | `apps/computer-vision/` | Validasi YOLO, training, evaluasi, prediksi, dan tes |
 | `apps/web-monitoring/` | Dashboard pemeriksaan kamera, berat, golongan, dan tiket masuk |
 | `scripts/cv.ps1` | Persiapan dataset dan prediksi di Windows |
-| `scripts/cv.sh` | Training/evaluasi GPU di WSL2 |
+| `scripts/cv.sh` | Benchmark, training, dan evaluasi Linux/WSL2 |
 | `scripts/setup_cv.py` | Menyiapkan sumber TensorFlow yang dipatok versinya |
 | `configs/training.json` | Lokasi dataset, folder eksperimen, dan parameter |
 | `data/raw/vehicles/` | Dataset asli, tidak masuk Git |
 | `data/processed/vehicles-v1/` | Manifest split yang dibekukan |
-| `models/mobilenet/runs/ssd-v2-001/` | Checkpoint, model ekspor, dan laporan |
+| `models/mobilenet/runs/ssd-v2-igpu-001/` | Checkpoint, model ekspor, dan laporan laptop sendiri |
 | `outputs/` | Prediksi dan paket model |
 
 Folder `.venv-data`, `.venv-training`, `.venv-tools`, `.venv-inference`, dan `.cache` merupakan file lokal; tidak ikut Git dan tidak perlu dibagikan ke anggota lain.

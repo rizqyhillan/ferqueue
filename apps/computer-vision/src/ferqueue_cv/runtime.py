@@ -33,8 +33,16 @@ def require_gpu():
     print(f'GPU aktif: {devices[0].name}', flush=True)
 
 
+def use_cpu():
+    # Environment is inherited by the separate official training process, too.
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    import tensorflow as tf
+    tf.config.set_visible_devices([], 'GPU')
+    print('Device training: CPU (Radeon iGPU tidak dipakai oleh backend TensorFlow ini).', flush=True)
+
+
 def model_template(root):
     template = root / '.cache/tensorflow-models/research/object_detection/configs/tf2/ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8.config'
     if not template.is_file():
-        raise ValueError('Sumber Object Detection API belum siap. Jalankan bash scripts/cv.sh setup di WSL2.')
+        raise ValueError('Sumber Object Detection API belum siap. Jalankan bash scripts/cv.sh setup di Linux.')
     return template
