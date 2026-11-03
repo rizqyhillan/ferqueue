@@ -1,13 +1,15 @@
-.venv-training/bin/python - <<'PY'
-from importlib.util import find_spec
-from pathlib import Path
+percobaan per training 
 
-p = Path(find_spec("tf_slim").origin).parent / "data/tfexample_decoder.py"
-old = "from tensorflow.python.ops import control_flow_ops"
-new = "from tensorflow.compat import v1 as control_flow_ops"
+num_steps = 3000
+1. prediction = 0.5
+2. predictions-debug = 0.25
+3. predictions-debug2 = 0.4
+3. predictions-debug3 = 0.28
+5. predictions-debug4 = 0.281
+6. predictions-debug5 = 0.29
+7. predictions-debug6 = 0.282
+8. predictions-debug7 = 0.283
 
-text = p.read_text()
-assert old in text or new in text, "Format file berbeda; hentikan."
-p.write_text(text.replace(old, new))
-print("Kompatibilitas decoder berhasil diperbaiki.")
-PY
+num_steps = 9000
+1. prediction-debug2.1 = 0.25
+2. prediction-debug2.1 = 0.28
