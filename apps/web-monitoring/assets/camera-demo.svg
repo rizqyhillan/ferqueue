@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 690" fill="none">
+  <defs>
+    <pattern id="wall" width="54" height="54" patternUnits="userSpaceOnUse"><path d="M54 0H0v54" stroke="#c1c1c1" stroke-width="1"/></pattern>
+    <pattern id="road" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M1 1h1M5 5h1" stroke="#999" stroke-width=".6"/></pattern>
+    <clipPath id="frame"><path d="M0 0h900v690H0z"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <path fill="#dedede" d="M0 0h900v690H0z"/>
+    <path fill="#d0d0d0" d="M0 123h900v290H0z"/>
+    <path fill="url(#wall)" d="M0 123h900v290H0z"/>
+    <path fill="#bababa" d="M-30 119 452 29l480 90v18H-30z"/>
+    <path stroke="#a9a9a9" stroke-width="6" d="M78 137v277m709-277v277"/>
+    <path fill="#b3b3b3" d="M216 218h375v195H216z"/>
+    <path fill="#a1a1a1" d="M227 228h354v185H227z"/>
+    <path stroke="#b8b8b8" stroke-width="2" d="M227 246h354m-354 19h354m-354 19h354m-354 19h354m-354 19h354m-354 19h354m-354 19h354m-354 19h354"/>
+    <path fill="#b8b8b8" d="M0 410h900v280H0z"/>
+    <path fill="url(#road)" d="M0 410h900v280H0z"/>
+    <path stroke="#ececec" stroke-width="6" d="m-80 639 430-147m83-28 262-91M343 734l293-189m74-47 210-135"/>
+    <path fill="#888" d="M0 412h900v6H0z"/>
+    <path fill="#929292" d="M0 425h900v3H0z"/>
+    <path fill="#cecece" d="M20 325h18v84H20zm824 0h18v84h-18z"/>
+    <path fill="#656565" d="M20 343h18v17H20zm0 35h18v17H20zm824-35h18v17h-18zm0 35h18v17h-18z"/>
+    <ellipse cx="466" cy="513" rx="319" ry="24" fill="#929292"/>
+    <g stroke-linejoin="round">
+      <path fill="#707070" stroke="#535353" stroke-width="3" d="M155 446h563v39H155z"/>
+      <path fill="#e8e8e8" stroke="#737373" stroke-width="2.5" d="M153 260h407v195H153z"/>
+      <path fill="#f0f0f0" d="M160 267h393v173H160z"/>
+      <path stroke="#d3d3d3" stroke-width="3" d="M182 270v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168m24-168v168"/>
+      <path stroke="#adadad" stroke-width="5" d="M154 446h406"/>
+      <path fill="#e5e5e5" stroke="#646464" stroke-width="2.5" d="M577 314h108l51 67 13 73v30H577z"/>
+      <path fill="#6f6f6f" stroke="#5b5b5b" stroke-width="3" d="M597 329h75l35 49H597z"/>
+      <path fill="#9a9a9a" d="M602 334h65l26 37h-91z"/>
+      <path stroke="#fafafa" stroke-opacity=".3" stroke-width="3" d="m610 337 23 29m8-29 23 29"/>
+      <path stroke="#ababab" stroke-width="2" d="M590 324v119h113v-55"/>
+      <path fill="#777" d="M602 394h24v5h-24z"/>
+      <path stroke="#555" stroke-width="4" d="m706 353 12-4v39"/>
+      <path fill="#555" d="M714 353h12v30h-12z"/>
+      <path fill="#b3b3b3" stroke="#747474" stroke-width="2" d="M704 400h37v37h-30z"/>
+      <path stroke="#777" stroke-width="3" d="M715 409h24m-22 9h23m-20 9h21"/>
+      <path fill="#fafafa" stroke="#888" stroke-width="2" d="M728 440h19v14h-19z"/>
+      <path fill="#555" d="M733 461h22v18h-22z"/>
+      <path fill="#bcbcbc" stroke="#777" stroke-width="2" d="M578 466h33v17h-33z"/>
+      <path fill="#444" d="M197 459h95v26h-95zm255 0h95v26h-95zm168 0h94v26h-94z"/>
+      <g stroke="#3c3c3c" stroke-width="4">
+        <circle cx="243" cy="482" r="35" fill="#4d4d4d"/><circle cx="495" cy="482" r="35" fill="#4d4d4d"/><circle cx="666" cy="482" r="35" fill="#4d4d4d"/>
+      </g>
+      <g fill="#bcbcbc" stroke="#858585" stroke-width="4"><circle cx="243" cy="482" r="18"/><circle cx="495" cy="482" r="18"/><circle cx="666" cy="482" r="18"/></g>
+      <g fill="#777"><circle cx="243" cy="482" r="6"/><circle cx="495" cy="482" r="6"/><circle cx="666" cy="482" r="6"/></g>
+      <path fill="#f5f5f5" stroke="#888" d="M723 475h25v10h-25z"/>
+    </g>
+    <path stroke="#fafafa" stroke-width="2" stroke-dasharray="8 7" d="M131 240h645v300H131z"/>
+    <path stroke="#fff" stroke-width="3" d="M131 261v-21h21m603 0h21v21m0 258v21h-21m-603 0h-21v-21"/>
+    <path fill="#292929" d="M131 215h156v25H131z"/>
+    <text x="143" y="232" fill="#fff" font-family="Arial,sans-serif" font-size="11" letter-spacing="1.2">TRUK · DATA CONTOH</text>
+  </g>
+</svg>

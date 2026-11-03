@@ -88,6 +88,7 @@ Hasil bounding box, kelas, confidence, dan JSON disimpan di `outputs/predictions
 | Lokasi | Isi |
 | --- | --- |
 | `apps/computer-vision/` | Validasi YOLO, training, evaluasi, prediksi, dan tes |
+| `apps/web-monitoring/` | Dashboard pemeriksaan kamera, berat, golongan, dan tiket masuk |
 | `scripts/cv.ps1` | Persiapan dataset dan prediksi di Windows |
 | `scripts/cv.sh` | Training/evaluasi GPU di WSL2 |
 | `scripts/setup_cv.py` | Menyiapkan sumber TensorFlow yang dipatok versinya |
@@ -103,6 +104,6 @@ Folder `.venv-data`, `.venv-training`, `.venv-tools`, `.venv-inference`, dan `.c
 
 PostgreSQL dipasang langsung di Windows menggunakan installer resmi dan dikelola melalui pgAdmin. Buat user/database `ferqueue`, lalu isi `DATABASE_URL` pada `.env` sesuai konfigurasi lokal. Contoh disediakan di `.env.example`. Training dan prediksi file tidak memerlukan database.
 
-Backend (`apps/backend/`), web (`apps/web-monitoring/`), dan firmware masih berupa kerangka. Belum ada tabel aplikasi, API integrasi, atau pengiriman hasil prediksi ke database/web.
+Backend (`apps/backend/`) dan firmware masih berupa kerangka. Web (`apps/web-monitoring/`) sudah menyediakan antarmuka pemeriksaan kamera, input berat/golongan, serta tiket dan riwayat lokal. Jalankan `npm.cmd run dev` dari folder tersebut, lalu buka http://localhost:4173. Lihat [panduan web monitoring](apps/web-monitoring/README.md). Belum ada tabel aplikasi, API integrasi, atau pengiriman hasil prediksi ke database/web.
 
 Pengukuran panjang, lebar, dan tinggi fisik masih membutuhkan modul kalibrasi tersendiri. Prediksi saat ini mengisi dimensi dengan `null` dan status `not_calibrated`; kotak deteksi bukan ukuran 3D. Metode sistem cerdas baru akan mengolah hasil dimensi dan berat sesudah datanya tersedia.

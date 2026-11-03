@@ -1,4 +1,7 @@
 # Python 3.11, Linux/WSL2 x86_64, NVIDIA GPU. Install only on the training laptop.
+# TensorBoard 2.15 imports pkg_resources, which is provided by this setuptools release.
+setuptools==80.9.0
+tensorboard==2.15.2
 tensorflow[and-cuda]==2.15.1
 tf-models-official==2.15.0
 tensorflow-text==2.15.0

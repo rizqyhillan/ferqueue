@@ -151,3 +151,42 @@ Script perbaikan juga menguji pembacaan JPEG dan PNG di dalam graph TensorFlow. 
 Pesan ini berasal dari wrapper TensorFlow yang mengharapkan ekstensi `category_stats` di pycocotools. Perhitungan COCO keseluruhan dapat selesai, tetapi laporan gagal disimpan saat wrapper mencoba membaca metrik per kelas.
 
 Perbarui kedua file `apps/computer-vision/src/ferqueue_cv/training.py` dan `apps/computer-vision/src/ferqueue_cv/coco_metrics.py`, kemudian jalankan ulang `bash scripts/cv.sh evaluate`. Evaluasi sekarang menggunakan API pycocotools standar dan mengambil AP per kelas dari tensor precision hasil evaluasi. Model, dataset, serta checkpoint yang sudah ada tetap dipakai; training dan export tidak perlu diulang.
+
+## Jika TensorBoard tidak menemukan pkg_resources
+
+TensorBoard 2.15 masih mengimpor `pkg_resources`. Environment perlu memakai setuptools yang menyediakan modul tersebut. Kebutuhan training sekarang mematok `setuptools==80.9.0` dan `tensorboard==2.15.2`; setup ikut memeriksa startup TensorBoard.
+
+Untuk memperbaiki environment yang sudah ada, jalankan dari root repo di Ubuntu:
+
+```bash
+.venv-training/bin/python -m pip install "setuptools==80.9.0"
+.venv-training/bin/python -m tensorboard.main --logdir models/mobilenet/runs/ssd-v2-001/training --host 127.0.0.1 --port 6006
+```
+
+Buka `http://localhost:6006` di browser Windows. Model dan log training yang sudah ada tetap digunakan.
+
+## Memeriksa model ketika loss turun tetapi prediksi masih lemah
+
+Jalankan pemeriksaan dari root repo di Ubuntu:
+
+```bash
+.venv-training/bin/python scripts/diagnose_model.py
+```
+
+Pemeriksaan ini menggunakan CPU untuk membaca nomor langkah pada checkpoint, membandingkan bobot training dan checkpoint pendamping ekspor, lalu menjalankan SavedModel pada satu gambar train per kelas serta gambar abu-abu. Hasilnya di `outputs/model-diagnosis.json`. Dataset, konfigurasi, checkpoint, dan bobot tidak diubah; tidak ada training atau export ulang.
+
+Hasil pembandingan bobot belum membuktikan kualitas generalisasi. Prediksi contoh train juga hanya pemeriksaan diagnostik; laporan evaluasi test tetap menjadi hasil pengujian yang terpisah.
+
+## Percobaan 6000 langkah
+
+`configs/training-6000.json` memakai dataset dan manifest pembagian yang sama, dengan `num_steps: 6000` dan folder hasil terpisah `models/mobilenet/runs/ssd-v2-6000`. Nilai awal lain mengikuti konfigurasi 3000 langkah. Percobaan dimulai dari checkpoint pretrained COCO; hasil 3000 langkah tetap tersimpan. Seed yang ada mengatur pembagian kelompok, sehingga bobot awal head dan perhitungan GPU belum dijamin identik antarpercobaan.
+
+```bash
+bash scripts/cv.sh train --config configs/training-6000.json
+bash scripts/cv.sh export --config configs/training-6000.json
+bash scripts/cv.sh evaluate --config configs/training-6000.json
+```
+
+Manifest yang sudah ada dipakai kembali; tidak perlu prepare ulang. Kode mengaitkan durasi cosine decay dengan num_steps, sehingga jadwal learning rate ikut berubah menjadi 6000 langkah. Ini merupakan eksperimen durasi training beserta jadwalnya, bukan penambahan 3000 langkah pada checkpoint lama.
+
+Bandingkan mAP keseluruhan/per kelas dan ketepatan kotak, bukan hanya loss training atau jumlah kotak. Gunakan threshold yang sama untuk perbandingan gambar. Jika hasil test digunakan berulang untuk memilih pengaturan, laporkan sebagai perbandingan eksploratif; penilaian final memerlukan data independen yang belum dipakai memilih pengaturan.

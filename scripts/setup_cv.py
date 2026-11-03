@@ -101,6 +101,7 @@ def main():
         if not args.sources_only:
             subprocess.run([sys.executable, '-m', 'pip', 'install', '-r',
                             str(root / 'apps/computer-vision/requirements-training.txt')], check=True)
+            subprocess.run([sys.executable, '-m', 'tensorboard.main', '--version'], check=True)
             subprocess.run([sys.executable, str(root / 'scripts/fix_tf_slim.py')], check=True)
         setup_sources(root)
         print('Setup training selesai. Jalankan check untuk menguji forward pass model.', flush=True)
