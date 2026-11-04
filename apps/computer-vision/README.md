@@ -1,6 +1,6 @@
 # PCV: dataset, training, dan prediksi gambar
 
-Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg. Kamera tidak diperlukan. Semua training dilakukan di laptop Windows dengan RTX 4060 melalui [Ubuntu WSL2](../../docs/TRAINING_GPU_WINDOWS.md).
+Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg atau COCO JSON yang sudah dibagi train/test. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
 
 ## Dataset yang diterima
 
@@ -34,6 +34,40 @@ Setiap gambar JPG/JPEG/PNG harus punya label `.txt`. Gambar background menggunak
 
 Jika `prepare` menemukan banyak file tanpa pasangan atau duplikat, jalankan `bash scripts/cv.sh clean-dataset` (Windows: `.\scripts\cv.ps1 clean-dataset`). Perintah ini membuat laporan lengkap dan menunggu input `y` setelah kamu review sebelum memindahkan kandidat ke karantina. Opsi `--dry-run` (PowerShell: `-DryRun`) hanya membuat laporan. Gambar identik dengan anotasi bertentangan tetap disimpan untuk diperiksa; label yang isinya sama pada gambar berbeda tidak dihapus. [Alur review, backup, dan pemulihan](../../scripts/README.md#review-dan-bersihkan-dataset-sebelum-prepare).
 
+## Sumber training COCO JSON
+
+COCO JSON dapat dipakai langsung sebagai sumber anotasi dengan `configs/training-coco.json`. Alurnya adalah **gambar + COCO JSON → manifest → TFRecord → training SSD MobileNet V2**. Bobot pretrained COCO dan format anotasi COCO merupakan hal yang terpisah; label YOLO juga tetap didukung oleh konfigurasi lama.
+
+Susunan untuk hasil konversi dataset saat ini:
+
+```text
+data/raw/vehicles/                         # Gambar asli
+data/processed/vehicles-coco/annotations/
+  instances_train.json
+  instances_test.json
+```
+
+Pada konfigurasi COCO, `dataset_dir` adalah folder akar gambar. `file_name` dalam setiap entri `images` harus relatif terhadap folder itu. Anotasi harus berisi `images`, `annotations`, dan `categories`; `bbox` menggunakan `[x, y, width, height]` dalam piksel. Label `.txt` dan `classes.txt` tidak dibaca pada alur COCO. Kategori train/test harus memiliki pemetaan ID dan nama yang sama; urutan daftar boleh berbeda. ID kategori diurutkan numerik lalu dipetakan ke ID model berurutan mulai dari 1, termasuk jika ID sumber tidak berurutan.
+
+Jalankan dari root repo:
+
+```bash
+# Sekali saja untuk membekukan sumber dan split COCO:
+bash scripts/cv.sh prepare --config configs/training-coco.json
+# Training CPU 3.000 langkah di run terpisah:
+bash scripts/cv.sh train --config configs/training-coco.json
+bash scripts/cv.sh export --config configs/training-coco.json
+bash scripts/cv.sh evaluate --config configs/training-coco.json --split test
+```
+
+Di Windows, persiapan dataset menggunakan `.\scripts\cv.ps1 prepare -Config configs/training-coco.json`. Semua perintah sesudahnya, termasuk prediksi atau pengemasan, juga perlu memakai konfigurasi COCO agar memilih run yang sesuai.
+
+Manifest dibuat di `data/processed/vehicles-coco-v1/` dan training di `models/mobilenet/runs/ssd-v2-coco-001/`. Konfigurasi dan run YOLO lama tidak diganti. Split pada kedua JSON dipertahankan persis; `seed`, `train_ratio`, dan `test_ratio` tidak membagi ulang data COCO. Konversi format tidak memperbaiki kebocoran sumber gambar atau pembagian yang sudah ada.
+
+Importer memeriksa keberadaan dan resolusi gambar, orientasi EXIF, kategori, ID/referensi anotasi, serta kotak yang finite dan berada dalam gambar. Gambar berulang atau identik secara byte ditolak, termasuk antar-split. Gambar tanpa anotasi dipertahankan sebagai background. Anotasi `iscrowd`/`ignore` belum didukung dan ditolak agar tidak berubah menjadi target biasa secara diam-diam; segmentasi tidak digunakan oleh model bbox ini. `clean-dataset` hanya berlaku untuk alur YOLO.
+
+Hash kedua JSON dan gambar dibekukan saat prepare. Jika anotasi atau gambar diubah, gunakan `prepared_dir` dan `run_dir` baru lalu prepare lagi. Converter eksternal dapat membulatkan koordinat menjadi piksel integer; importer memakai nilai bbox dalam JSON tersebut sebagai sumber, bukan mengambil ulang kotak YOLO.
+
 ## Pembagian kelompok dan data uji
 
 Untuk frame video atau foto satu kendaraan dalam sesi yang sama, simpan dalam subfolder tingkat pertama yang sama. Kelompok itu tidak akan tersebar antara train dan test.
@@ -49,7 +83,7 @@ frame-100.jpg,rekaman-02
 
 Nama gambar relatif terhadap folder `images/` bila ada; jika tidak, relatif terhadap `data/raw/vehicles/`. Tanpa folder/CSV, setiap gambar flat dianggap independen. Script tidak dapat mengetahui sendiri apakah dua foto menampilkan kendaraan yang sama.
 
-Perlu minimal dua kelompok independen untuk membuat split train/test, tetapi jumlah itu saja belum cukup untuk menilai kualitas model. Default sekitar 80% train dan 20% test berdasarkan kelompok; jumlah gambar bisa berbeda karena ukuran kelompok tidak sama.
+Perlu minimal dua kelompok independen untuk membuat split train/test, tetapi jumlah itu saja belum cukup untuk menilai kualitas model. Konfigurasi saat ini sekitar 70% train dan 30% test berdasarkan kelompok; jumlah gambar bisa berbeda karena ukuran kelompok tidak sama.
 
 ## Validasi ringan di Windows
 
@@ -71,22 +105,22 @@ Edit `configs/training.json`:
 | --- | --- | --- |
 | `dataset_dir` | `data/raw/vehicles` | Dataset asli |
 | `prepared_dir` | `data/processed/vehicles-v1` | Manifest pembagian |
-| `run_dir` | `models/mobilenet/runs/ssd-v2-001` | Satu eksperimen/model |
-| `train_ratio` | 0.8 | Proporsi kelompok training |
-| `test_ratio` | 0.2 | Proporsi kelompok test; jumlah kedua rasio harus 1 |
+| `run_dir` | `models/mobilenet/runs/ssd-v2-igpu-001` | Satu eksperimen/model |
+| `train_ratio` | 0.7 | Proporsi kelompok training |
+| `test_ratio` | 0.3 | Proporsi kelompok test; jumlah kedua rasio harus 1 |
 | `batch_size` | 4 | Gambar per langkah |
 | `num_steps` | 3000 | Jumlah langkah, bukan epoch |
 | `learning_rate` | 0.004 | Nilai awal fine-tuning |
 | `seed` | 42 | Pembagian kelompok, bukan jaminan determinisme training GPU |
 | `confidence_threshold` | 0.5 | Ambang tampilan prediksi |
 
-## Training di laptop NVIDIA
+## Training di laptop sendiri
 
-Dari root repo dalam Ubuntu WSL2:
+Dari root repo dalam Linux native:
 
 ```bash
 bash scripts/cv.sh setup
-bash scripts/cv.sh check --require-gpu
+bash scripts/cv.sh check
 # Bila belum ada manifest:
 bash scripts/cv.sh prepare
 bash scripts/cv.sh train
@@ -99,6 +133,8 @@ Transfer learning memakai checkpoint COCO resmi. Script membuat TFRecord, label 
 Artefak dalam `run_dir`: `inputs.json` (config + manifest), `label_map.pbtxt`, `pipeline.config`, `records/`, `training/`, `exports/`, `export.json`, dan `reports/`.
 
 Checkpoint disimpan setiap 100 langkah. Ulangi `train` dengan config/manifest sama untuk resume. Jangan menjalankan dua training pada run yang sama. Parameter/dataset berbeda memerlukan `run_dir` baru. Bila split tetap, jangan membuat ulang pembagian untuk setiap eksperimen.
+
+Untuk NVIDIA, setup memakai `--device cuda` dan perintah check/train memakai `--require-gpu`.
 
 ## Evaluasi
 

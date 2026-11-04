@@ -15,6 +15,14 @@ def load_config(path, root):
         value = Path(config[key])
         if value.is_absolute() or not (root / value).resolve().is_relative_to(root):
             raise ValueError(f'{key} harus berupa path di dalam repo.')
+    dataset_format = config.get('dataset_format', 'yolo')
+    if dataset_format not in ('yolo', 'coco'):
+        raise ValueError('dataset_format harus yolo atau coco.')
+    if dataset_format == 'coco':
+        from .coco_dataset import annotation_paths
+        annotation_paths(config, root)
+    elif 'coco_annotations' in config:
+        raise ValueError('Gunakan dataset_format coco jika konfigurasi berisi coco_annotations.')
     for key in ('batch_size', 'num_steps'):
         if type(config[key]) is not int or config[key] < 1:
             raise ValueError(f'{key} harus berupa bilangan bulat positif.')
@@ -34,7 +42,7 @@ def load_config(path, root):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Training deteksi kendaraan dari gambar LabelImg YOLO.')
+    parser = argparse.ArgumentParser(description='Training deteksi kendaraan dari anotasi YOLO atau COCO JSON.')
     parser.add_argument('action', choices=['check', 'check-inference', 'prepare', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
     parser.add_argument('--config', default='configs/training.json')
     parser.add_argument('--input', default='data/inference')
@@ -48,9 +56,12 @@ def main():
     configure_sources(root)
     try:
         config = load_config(args.config, root)
-        if args.require_gpu or args.action == 'train':
+        if args.require_gpu:
             from .runtime import require_gpu
             require_gpu()
+        elif args.action in ('check', 'train'):
+            from .runtime import use_cpu
+            use_cpu()
         if args.action == 'test':
             subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s',
                             'apps/computer-vision/tests', '-v'], check=True)

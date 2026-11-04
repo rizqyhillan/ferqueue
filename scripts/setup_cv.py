@@ -91,16 +91,25 @@ def setup_protoc(cache):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sources-only', action='store_true')
+    parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     args = parser.parse_args()
     if sys.version_info[:2] != (3, 11) or sys.maxsize <= 2 ** 32:
         raise SystemExit('Gunakan Python 3.11 64-bit untuk environment training.')
     root = Path(__file__).resolve().parents[1]
     if not args.sources_only and platform.system() != 'Linux':
-        raise SystemExit('Setup training GPU dijalankan dari Ubuntu WSL2 di laptop NVIDIA, bukan PowerShell Windows.')
+        raise SystemExit('Setup training dijalankan dari terminal Linux (native atau WSL2).')
     try:
         if not args.sources_only:
-            subprocess.run([sys.executable, '-m', 'pip', 'install', '-r',
-                            str(root / 'apps/computer-vision/requirements-training.txt')], check=True)
+            requirements = 'requirements-training-cuda.txt' if args.device == 'cuda' else 'requirements-training.txt'
+            uv = root / '.venv-tools/bin/uv'
+            installer = ([str(uv), 'pip', 'install', '--python', sys.executable,
+                          '--cache-dir', str(root / '.cache/uv')]
+                         if uv.is_file() else [sys.executable, '-m', 'pip', 'install'])
+            wheel_cache = root / '.cache/wheels'
+            if wheel_cache.is_dir():
+                installer.extend(['--find-links', str(wheel_cache)])
+            subprocess.run([*installer, '-r',
+                            str(root / 'apps/computer-vision' / requirements)], check=True)
             subprocess.run([sys.executable, '-m', 'tensorboard.main', '--version'], check=True)
             subprocess.run([sys.executable, str(root / 'scripts/fix_tf_slim.py')], check=True)
         setup_sources(root)

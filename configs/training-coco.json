@@ -1,0 +1,17 @@
+{
+  "dataset_format": "coco",
+  "dataset_dir": "data/raw/vehicles",
+  "coco_annotations": {
+    "train": "data/processed/vehicles-coco/annotations/instances_train.json",
+    "test": "data/processed/vehicles-coco/annotations/instances_test.json"
+  },
+  "prepared_dir": "data/processed/vehicles-coco-v1",
+  "run_dir": "models/mobilenet/runs/ssd-v2-coco-001",
+  "seed": 42,
+  "train_ratio": 0.7,
+  "test_ratio": 0.3,
+  "batch_size": 4,
+  "num_steps": 3000,
+  "learning_rate": 0.004,
+  "confidence_threshold": 0.29
+}

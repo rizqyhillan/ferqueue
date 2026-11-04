@@ -1,4 +1,4 @@
-"""Validate LabelImg YOLO data and freeze a reproducible, group-aware split."""
+"""Validate YOLO or pre-split COCO data and freeze the training manifest."""
 
 import csv
 import hashlib
@@ -123,8 +123,16 @@ def prepare(config, root):
     output = root / config['prepared_dir']
     if output.exists() and any(output.iterdir()):
         raise ValueError(f'{output} sudah berisi dataset. Ganti prepared_dir untuk versi baru; split lama tidak ditimpa.')
-    classes, items = collect_dataset(root / config['dataset_dir'], root)
-    splits = split_groups(items, config['train_ratio'], config['test_ratio'], config['seed'])
+    source = None
+    dataset_format = config.get('dataset_format', 'yolo')
+    if dataset_format == 'coco':
+        from .coco_dataset import collect_coco_dataset
+        classes, splits, source = collect_coco_dataset(config, root)
+    elif dataset_format == 'yolo':
+        classes, items = collect_dataset(root / config['dataset_dir'], root)
+        splits = split_groups(items, config['train_ratio'], config['test_ratio'], config['seed'])
+    else:
+        raise ValueError('dataset_format harus yolo atau coco.')
     train_ids = {box['class_id'] for item in splits['train'] for box in item['boxes']}
     missing = [name for index, name in enumerate(classes, 1) if index not in train_ids]
     if missing:
@@ -138,6 +146,8 @@ def prepare(config, root):
     manifest = {'schema_version': 2, 'classes': classes, 'seed': config['seed'],
                 'train_ratio': config['train_ratio'], 'test_ratio': config['test_ratio'],
                 'splits': splits, 'warnings': warnings}
+    if source is not None:
+        manifest['source'] = source
     output.mkdir(parents=True, exist_ok=True)
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
     summary = {}
@@ -151,6 +161,11 @@ def prepare(config, root):
 def verify_images(manifest, root):
     if set(manifest['splits']) != {'train', 'test'} or any(not rows for rows in manifest['splits'].values()):
         raise ValueError('Manifest harus berisi train dan test saja, keduanya tidak kosong. Jalankan prepare dengan prepared_dir baru dan gunakan run_dir baru.')
+    if manifest.get('source', {}).get('format') == 'coco':
+        for source in manifest['source']['annotations'].values():
+            path = root / source['path']
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != source['sha256']:
+                raise ValueError(f'Anotasi COCO berubah/hilang setelah prepare: {path}. Buat prepared_dir dan run_dir baru.')
     for rows in manifest['splits'].values():
         for row in rows:
             path = root / row['image']

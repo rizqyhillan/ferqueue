@@ -1,7 +1,7 @@
 {
   "dataset_dir": "data/raw/vehicles",
   "prepared_dir": "data/processed/vehicles-v1",
-  "run_dir": "models/mobilenet/runs/ssd-v2-6000",
+  "run_dir": "models/mobilenet/runs/ssd-v2-igpu-6000",
   "seed": 42,
   "train_ratio": 0.7,
   "test_ratio": 0.3,
