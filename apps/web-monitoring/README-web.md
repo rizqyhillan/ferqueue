@@ -23,7 +23,7 @@ npm.cmd test
 - Header, navigasi pemeriksaan dan riwayat tiket, tanggal serta jam WIB.
 - Pratinjau ilustrasi kendaraan berlabel data contoh. Aktifkan kamera perangkat dengan izin browser, atau unggah JPG/PNG/WebP maksimal 12 MB. Tombol ambil gambar mengunduh PNG. Tombol perbesar membuka layar penuh jika didukung browser.
 - Berat dan golongan dapat dikonfirmasi melalui dialog Ubah. Kamera yang sebenarnya atau gambar yang diunggah tidak diberi hasil deteksi atau ukuran contoh.
-- Validasi nomor polisi, berat, dan pilihan golongan sebelum tiket diterbitkan. Nilai contoh awal perlu dikonfirmasi. Pemeriksaan kendaraan berikutnya mengosongkan berat, golongan, dan nomor polisi agar hasil kendaraan sebelumnya tidak terpakai.
+- Validasi nama pengemudi, berat, dan pilihan golongan sebelum tiket diterbitkan. Nilai contoh awal perlu dikonfirmasi. Pemeriksaan kendaraan berikutnya mengosongkan berat, golongan, dan nama pengemudi agar hasil kendaraan sebelumnya tidak terpakai.
 - Nomor tiket berurutan per tanggal WIB, riwayat dan pencarian lokal (500 tiket terbaru), cetak ulang, serta tampilan cetak khusus. Pilih printer atau Simpan sebagai PDF pada dialog cetak browser.
 - Riwayat disimpan menggunakan `localStorage`, hanya tersedia di browser/perangkat yang sama. Jika penyimpanan tidak tersedia, tiket tetap dapat dicetak dan pemberitahuan penyimpanan sementara ditampilkan.
 

@@ -15,20 +15,29 @@ export const CATEGORIES = Object.freeze([
   { code: 'IX', label: 'Kendaraan barang khusus' },
 ]);
 
-export const formatWeight = weight => new Intl.NumberFormat('id-ID').format(weight);
-export const categoryInfo = code => CATEGORIES.find(category => category.code === code);
-export function normalizePlate(value) {
-  const text = String(value ?? '').trim().toUpperCase();
-  const match = text.match(/^([A-Z]{1,2})\s*([1-9]\d{0,3})\s*([A-Z]{0,3})$/);
-  return match ? [match[1], match[2], match[3]].filter(Boolean).join(' ') : text.replace(/\s+/g, ' ');
-}
-export function validateInspection({ plate, weight, category }) {
-  const errors = {};
-  if (!/^[A-Z]{1,2} [1-9]\d{0,3}(?: [A-Z]{1,3})?$/.test(normalizePlate(plate))) {
-    errors.plate = 'Isi nomor polisi yang valid, contoh B 9241 KXS.';
+export const formatWeight = (weight, fractionDigits = 2) => {
+  if (weight === null || weight === undefined || weight === '' || Number.isNaN(Number(weight))) {
+    return '0,00';
   }
-  if (!Number.isInteger(weight) || weight < 1 || weight > 200000) {
-    errors.weight = 'Masukkan berat antara 1–200.000 kg dalam bilangan bulat.';
+  return new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Number(weight));
+};
+export const categoryInfo = code => CATEGORIES.find(category => category.code === code);
+export function normalizeDriver(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+export const normalizePlate = normalizeDriver;
+export function validateInspection({ driver, plate, weight, category }) {
+  const errors = {};
+  const name = normalizeDriver(driver ?? plate);
+  if (!name || name.length < 2 || name.length > 60 || !/^[A-Za-zÀ-ÿ\s'.-]{2,60}$/.test(name)) {
+    errors.driver = 'Isi nama pengemudi yang valid (minimal 2 huruf, hanya huruf dan tanda baca).';
+    errors.plate = errors.driver;
+  }
+  if (typeof weight !== 'number' || Number.isNaN(weight) || weight <= 0 || weight > 200000) {
+    errors.weight = 'Masukkan berat antara 0,01–200.000 kg.';
   }
   if (!categoryInfo(category)) errors.category = 'Pilih golongan kendaraan terlebih dahulu.';
   return errors;
@@ -47,14 +56,19 @@ export function createTicket(inspection, history = [], now = new Date()) {
     const suffix = ticket.number.slice(prefix.length);
     return /^\d+$/.test(suffix) ? Math.max(max, Number(suffix)) : max;
   }, 0) + 1;
+  const driverName = normalizeDriver(inspection.driver ?? inspection.plate);
   return Object.freeze({
     version: 1,
     number: prefix + String(sequence).padStart(3, '0'),
-    plate: normalizePlate(inspection.plate),
+    driver: driverName,
+    plate: driverName,
     weight: inspection.weight,
     category: inspection.category,
+    length: inspection.length ?? '7,20',
+    width: inspection.width ?? '2,50',
+    height: inspection.height ?? '3,10',
+    vehicleStatus: inspection.vehicleStatus === 'Anomali' ? 'Anomali' : 'Normal',
     createdAt: now.toISOString(),
-    gate: '01',
     source: 'manual-demo',
   });
 }
@@ -64,9 +78,11 @@ export function parseHistory(raw) {
     if (!Array.isArray(parsed)) return [];
     const seen = new Set();
     return parsed.filter(ticket => {
-      if (!ticket || ticket.version !== 1 || ticket.source !== 'manual-demo' || ticket.gate !== '01') return false;
+      if (!ticket || ticket.version !== 1 || ticket.source !== 'manual-demo') return false;
       if (typeof ticket.number !== 'string' || !/^FQ-\d{6}-\d{3,6}$/.test(ticket.number) || seen.has(ticket.number)) return false;
-      if (typeof ticket.plate !== 'string' || Object.keys(validateInspection(ticket)).length) return false;
+      if (typeof ticket.weight !== 'number') return false;
+      const name = ticket.driver ?? ticket.plate;
+      if (typeof name !== 'string' || Object.keys(validateInspection(ticket)).length) return false;
       if (typeof ticket.createdAt !== 'string' || Number.isNaN(Date.parse(ticket.createdAt))) return false;
       seen.add(ticket.number);
       return true;
