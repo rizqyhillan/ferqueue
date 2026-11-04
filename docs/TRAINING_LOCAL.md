@@ -36,6 +36,18 @@ Untuk eksperimen 6.000 langkah di folder terpisah:
 bash scripts/cv.sh train --config configs/training-6000.json
 ```
 
+## Sumber training COCO JSON
+
+Untuk dataset hasil konversi COCO JSON, gunakan konfigurasi terpisah:
+
+```bash
+# Sekali saja; tidak perlu diulang jika manifest COCO sudah ada:
+bash scripts/cv.sh prepare --config configs/training-coco.json
+bash scripts/cv.sh train --config configs/training-coco.json
+```
+
+JSON sumber berada di `data/processed/vehicles-coco/annotations/`, gambar tetap di `data/raw/vehicles/`, dan hasil training menggunakan `models/mobilenet/runs/ssd-v2-coco-001/`. Anotasi dibaca dari COCO, tanpa memerlukan label YOLO. Split JSON tidak diacak ulang. Tambahkan `--config configs/training-coco.json` juga pada export, evaluate, predict, dan package-model. Lihat [format dan validasi COCO](../apps/computer-vision/README.md#sumber-training-coco-json).
+
 ## Ekspor dan evaluasi
 
 ```bash

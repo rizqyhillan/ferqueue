@@ -45,6 +45,8 @@ data/raw/vehicles/
 
 Gunakan `classes.txt` asli; urutan kelas harus sama dengan saat labeling. Panduan format folder, kelompok video, dan pemeriksaan label: [panduan PCV](apps/computer-vision/README.md).
 
+Hasil konversi **COCO JSON** juga bisa dipakai sebagai sumber training melalui `configs/training-coco.json`. Siapkan `instances_train.json` dan `instances_test.json` di `data/processed/vehicles-coco/annotations/`, lalu jalankan `bash scripts/cv.sh prepare --config configs/training-coco.json` sekali dan `bash scripts/cv.sh train --config configs/training-coco.json`. Split JSON dipertahankan dan hasil memakai folder eksperimen terpisah. [Panduan sumber COCO](apps/computer-vision/README.md#sumber-training-coco-json).
+
 Di Windows, pasang Python 3.11 64-bit, lalu dari root repo:
 
 ```powershell

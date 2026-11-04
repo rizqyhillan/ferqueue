@@ -36,6 +36,8 @@ def _digest(path):
 
 
 def audit_dataset(config, root):
+    if config.get('dataset_format', 'yolo') != 'yolo':
+        raise ValueError('clean-dataset hanya mendukung dataset YOLO; dataset COCO tidak diubah.')
     root = Path(root).resolve()
     dataset = _inside(root / config['dataset_dir'], root)
     if not dataset.is_dir() or dataset == root:

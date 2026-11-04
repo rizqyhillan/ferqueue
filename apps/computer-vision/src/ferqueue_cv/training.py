@@ -22,6 +22,14 @@ def load_manifest(config, root):
     if not path.is_file():
         raise ValueError('Dataset belum disiapkan. Jalankan prepare terlebih dahulu.')
     manifest = json.loads(path.read_text(encoding='utf-8'))
+    source = manifest.get('source', {})
+    if config.get('dataset_format', 'yolo') != source.get('format', 'yolo'):
+        raise ValueError('Format sumber manifest berbeda dari konfigurasi. Gunakan prepared_dir baru dan jalankan prepare.')
+    if source.get('format') == 'coco':
+        expected = {split: Path(value).as_posix() for split, value in config['coco_annotations'].items()}
+        actual = {split: item['path'] for split, item in source['annotations'].items()}
+        if expected != actual:
+            raise ValueError('Path anotasi COCO berbeda dari manifest. Gunakan prepared_dir baru dan jalankan prepare.')
     verify_images(manifest, root)
     return manifest
 
@@ -105,7 +113,7 @@ def make_pipeline(config, manifest, pretrained, run):
     pipeline = pipeline_pb2.TrainEvalPipelineConfig()
     text_format.Parse((pretrained / 'pipeline.config').read_text(), pipeline)
     pipeline.model.ssd.num_classes = len(manifest['classes'])
-    pipeline.model.ssd.freeze_batchnorm = True
+    pipeline.model.ssd.freeze_batchnorm = config.get('freeze_batchnorm', True)
     train = pipeline.train_config
     train.batch_size = config['batch_size']
     train.num_steps = config['num_steps']

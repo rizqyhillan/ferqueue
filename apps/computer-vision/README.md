@@ -1,6 +1,6 @@
 # PCV: dataset, training, dan prediksi gambar
 
-Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
+Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg atau COCO JSON yang sudah dibagi train/test. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
 
 ## Dataset yang diterima
 
@@ -33,6 +33,40 @@ Baris label YOLO: `class_id center_x center_y width height`, dengan koordinat di
 Setiap gambar JPG/JPEG/PNG harus punya label `.txt`. Gambar background menggunakan label kosong yang dibuat sengaja. Label hilang, kotak tidak valid, ID kelas salah, file rusak, gambar duplikat, serta label tanpa pasangan gambar ditolak. Normalisasi rotasi EXIF sebelum labeling, bukan setelah kotak dibuat.
 
 Jika `prepare` menemukan banyak file tanpa pasangan atau duplikat, jalankan `bash scripts/cv.sh clean-dataset` (Windows: `.\scripts\cv.ps1 clean-dataset`). Perintah ini membuat laporan lengkap dan menunggu input `y` setelah kamu review sebelum memindahkan kandidat ke karantina. Opsi `--dry-run` (PowerShell: `-DryRun`) hanya membuat laporan. Gambar identik dengan anotasi bertentangan tetap disimpan untuk diperiksa; label yang isinya sama pada gambar berbeda tidak dihapus. [Alur review, backup, dan pemulihan](../../scripts/README.md#review-dan-bersihkan-dataset-sebelum-prepare).
+
+## Sumber training COCO JSON
+
+COCO JSON dapat dipakai langsung sebagai sumber anotasi dengan `configs/training-coco.json`. Alurnya adalah **gambar + COCO JSON → manifest → TFRecord → training SSD MobileNet V2**. Bobot pretrained COCO dan format anotasi COCO merupakan hal yang terpisah; label YOLO juga tetap didukung oleh konfigurasi lama.
+
+Susunan untuk hasil konversi dataset saat ini:
+
+```text
+data/raw/vehicles/                         # Gambar asli
+data/processed/vehicles-coco/annotations/
+  instances_train.json
+  instances_test.json
+```
+
+Pada konfigurasi COCO, `dataset_dir` adalah folder akar gambar. `file_name` dalam setiap entri `images` harus relatif terhadap folder itu. Anotasi harus berisi `images`, `annotations`, dan `categories`; `bbox` menggunakan `[x, y, width, height]` dalam piksel. Label `.txt` dan `classes.txt` tidak dibaca pada alur COCO. Kategori train/test harus memiliki pemetaan ID dan nama yang sama; urutan daftar boleh berbeda. ID kategori diurutkan numerik lalu dipetakan ke ID model berurutan mulai dari 1, termasuk jika ID sumber tidak berurutan.
+
+Jalankan dari root repo:
+
+```bash
+# Sekali saja untuk membekukan sumber dan split COCO:
+bash scripts/cv.sh prepare --config configs/training-coco.json
+# Training CPU 3.000 langkah di run terpisah:
+bash scripts/cv.sh train --config configs/training-coco.json
+bash scripts/cv.sh export --config configs/training-coco.json
+bash scripts/cv.sh evaluate --config configs/training-coco.json --split test
+```
+
+Di Windows, persiapan dataset menggunakan `.\scripts\cv.ps1 prepare -Config configs/training-coco.json`. Semua perintah sesudahnya, termasuk prediksi atau pengemasan, juga perlu memakai konfigurasi COCO agar memilih run yang sesuai.
+
+Manifest dibuat di `data/processed/vehicles-coco-v1/` dan training di `models/mobilenet/runs/ssd-v2-coco-001/`. Konfigurasi dan run YOLO lama tidak diganti. Split pada kedua JSON dipertahankan persis; `seed`, `train_ratio`, dan `test_ratio` tidak membagi ulang data COCO. Konversi format tidak memperbaiki kebocoran sumber gambar atau pembagian yang sudah ada.
+
+Importer memeriksa keberadaan dan resolusi gambar, orientasi EXIF, kategori, ID/referensi anotasi, serta kotak yang finite dan berada dalam gambar. Gambar berulang atau identik secara byte ditolak, termasuk antar-split. Gambar tanpa anotasi dipertahankan sebagai background. Anotasi `iscrowd`/`ignore` belum didukung dan ditolak agar tidak berubah menjadi target biasa secara diam-diam; segmentasi tidak digunakan oleh model bbox ini. `clean-dataset` hanya berlaku untuk alur YOLO.
+
+Hash kedua JSON dan gambar dibekukan saat prepare. Jika anotasi atau gambar diubah, gunakan `prepared_dir` dan `run_dir` baru lalu prepare lagi. Converter eksternal dapat membulatkan koordinat menjadi piksel integer; importer memakai nilai bbox dalam JSON tersebut sebagai sumber, bukan mengambil ulang kotak YOLO.
 
 ## Pembagian kelompok dan data uji
 

@@ -1,5 +1,7 @@
 import { STORAGE_KEY, MAX_HISTORY, CATEGORIES, categoryInfo, createTicket, formatWeight, normalizePlate, parseHistory, validateInspection } from './tickets.js';
 
+import './live_detection.js';
+
 const $ = selector => document.querySelector(selector);
 const state = { weight: 8420, category: 'VI B', confirmed: false, issued: null, history: [], stream: null, imageUrl: null, cameraMode: 'demo', pendingIssue: false };
 const dateFormat = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' });
