@@ -1,4 +1,7 @@
 const video = document.querySelector('#camera-video');
+const uploadedImage = document.querySelector('#camera-image');
+let lastUpload = null;
+window.addEventListener('ferqueue:camera-reset', () => { lastUpload = null; overlay.hidden = true; });
 const viewport = document.querySelector('#camera-viewport');
 
 Object.assign(video.style, {
@@ -67,27 +70,34 @@ async function tick() {
       track => track.readyState === 'live'
     );
 
-  if (!live || document.hidden) {
+  const uploaded = !uploadedImage.hidden && uploadedImage.dataset.pcv === 'true' && uploadedImage.complete;
+  const media = live ? video : uploadedImage;
+  const source = live ? stream : uploadedImage.src;
+  if (!live && uploaded && source === lastUpload && !document.hidden) {
+    setTimeout(tick, 250);
+    return;
+  }
+  if ((!live && !uploaded) || document.hidden) {
     overlay.hidden = true;
     setTimeout(tick, 250);
     return;
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
     const ratio = Math.min(
-      1, 640 / Math.max(video.videoWidth, video.videoHeight)
+      1, 640 / Math.max(live ? video.videoWidth : media.naturalWidth, live ? video.videoHeight : media.naturalHeight)
     );
     frame.width = Math.max(
-      1, Math.round(video.videoWidth * ratio)
+      1, Math.round((live ? video.videoWidth : media.naturalWidth) * ratio)
     );
     frame.height = Math.max(
-      1, Math.round(video.videoHeight * ratio)
+      1, Math.round((live ? video.videoHeight : media.naturalHeight) * ratio)
     );
     frameContext.drawImage(
-      video, 0, 0, frame.width, frame.height
+      media, 0, 0, frame.width, frame.height
     );
 
     const blob = await new Promise(resolve =>
@@ -96,7 +106,7 @@ async function tick() {
     if (!blob) throw new Error('Frame kamera belum tersedia');
 
     const response = await fetch(
-      'http://127.0.0.1:8000/detect',
+      '/api/detect',
       {
         method: 'POST',
         headers: { 'Content-Type': 'image/jpeg' },
@@ -110,7 +120,9 @@ async function tick() {
     }
 
     // Abaikan hasil lama jika kamera sudah dihentikan/diganti.
-    if (video.srcObject !== stream || video.hidden) return;
+    if (live ? video.srcObject !== source || video.hidden : uploadedImage.src !== source || uploadedImage.hidden) return;
+    if (!live) lastUpload = source;
+    window.dispatchEvent(new CustomEvent('ferqueue:cv-result', { detail: data }));
 
     overlay.hidden = false;
     drawDetections(data.detections);
@@ -133,7 +145,8 @@ async function tick() {
       'Deteksi aktif · ' + data.inference_ms + ' ms per frame';
   } catch (error) {
     overlay.hidden = true;
-    if (video.srcObject === stream && !video.hidden) {
+    if (live ? video.srcObject === source && !video.hidden : uploadedImage.src === source && !uploadedImage.hidden) {
+      window.dispatchEvent(new CustomEvent('ferqueue:cv-error'));
       document.querySelector('#vehicle-summary').textContent =
         'Deteksi belum tersedia';
       document.querySelector('#visual-badge').textContent =

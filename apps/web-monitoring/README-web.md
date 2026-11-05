@@ -1,47 +1,68 @@
-# FERQUEUE — Web Monitoring
+# FERQUEUE — kamera web dan PCV
 
-Antarmuka pos masuk pelabuhan dengan empat panel sesuai sketsa: **kamera** besar di kiri, **berat** dan **golongan** di kanan atas, serta **tiket masuk** di kanan bawah. Panel menggunakan sudut siku, susunan simetris, warna netral, dan satu aksen biru tua. Pada layar kecil panel disusun vertikal.
+Alur aktif: kamera/unggah gambar → Flask `/api/detect` → model PCV lokal → bounding box, kelas Mobil/Truk/Bus dan confidence pada web. Golongan dipilih operator lewat **Ubah**. Dimensi belum diukur. Kamera ini tidak memerlukan ESP32, MySQL atau model anomali.
 
-## Menjalankan
+## Menjalankan di Linux (dari root repo)
 
-Butuh Node.js 20 atau lebih baru. Tidak perlu memasang dependensi.
+Setup web sekali:
 
-```powershell
-cd apps/web-monitoring
-npm.cmd run dev
+```bash
+python3 -m venv .venv-web
+.venv-web/bin/python -m pip install -r apps/web-monitoring/requirements.txt
 ```
 
-Buka **http://localhost:4173**. Server hanya menerima koneksi dari perangkat lokal. Jika port terpakai, atur `PORT` di environment sebelum menjalankan server.
+Terminal pertama — web:
 
-```powershell
-npm.cmd run check
-npm.cmd test
+```bash
+.venv-web/bin/python apps/web-monitoring/app.py
 ```
 
-## Fitur
+Terminal kedua — PCV:
 
-- Header, navigasi pemeriksaan dan riwayat tiket, tanggal serta jam WIB.
-- Pratinjau ilustrasi kendaraan berlabel data contoh. Aktifkan kamera perangkat dengan izin browser, atau unggah JPG/PNG/WebP maksimal 12 MB. Tombol ambil gambar mengunduh PNG. Tombol perbesar membuka layar penuh jika didukung browser.
-- Berat dan golongan dapat dikonfirmasi melalui dialog Ubah. Kamera yang sebenarnya atau gambar yang diunggah tidak diberi hasil deteksi atau ukuran contoh.
-- Validasi nama pengemudi, berat, dan pilihan golongan sebelum tiket diterbitkan. Nilai contoh awal perlu dikonfirmasi. Pemeriksaan kendaraan berikutnya mengosongkan berat, golongan, dan nama pengemudi agar hasil kendaraan sebelumnya tidak terpakai.
-- Nomor tiket berurutan per tanggal WIB, riwayat dan pencarian lokal (500 tiket terbaru), cetak ulang, serta tampilan cetak khusus. Pilih printer atau Simpan sebagai PDF pada dialog cetak browser.
-- Riwayat disimpan menggunakan `localStorage`, hanya tersedia di browser/perangkat yang sama. Jika penyimpanan tidak tersedia, tiket tetap dapat dicetak dan pemberitahuan penyimpanan sementara ditampilkan.
+```bash
+python3 scripts/start_pcv.py
+```
 
-## Batas integrasi
+Launcher PCV memakai `.venv-training` atau `.venv-inference` yang sudah ada dan memilih model melalui `configs/training-coco-bn.json`. Tunggu pesan **API siap**. Untuk model dari eksperimen lain:
 
-Ini antarmuka demo yang dapat dijalankan, belum terhubung ke API, PostgreSQL, load cell, model PCV, maupun palang gate. Berat dan golongan merupakan **input operator**, dimensi awal adalah **contoh simulasi**, dan tiket cetak diberi label demo. Pilihan golongan bukan keputusan klasifikasi otomatis atau penetapan tarif. Tidak ada tarif atau pembayaran yang dihitung.
+```bash
+python3 scripts/start_pcv.py --config configs/training.json
+```
 
-Kamera memerlukan localhost atau HTTPS dan izin pengguna. Tidak ada gambar yang dikirim ke server; kamera dan unggah gambar diproses di browser. Kamera dihentikan ketika dinonaktifkan atau halaman ditinggalkan.
+Model harus sudah diekspor pada `run_dir` config terpilih. Bila belum ada environment/model, ikuti panduan computer vision untuk setup dan export/import terlebih dahulu. Launcher tidak melakukan training atau unduhan otomatis.
 
-## Struktur
+Buka **http://localhost:5000**, klik **Aktifkan kamera**, dan izinkan akses kamera. Bisa juga klik **Unggah** untuk menguji JPG/PNG/WebP. Hasil pada gambar unggahan dipertahankan sampai gambar diganti; kamera live memperbarui hasil setiap frame selesai diproses. Gambar diperkecil hingga sisi terpanjang 640 piksel sebelum dikirim. Tidak ada pengukuran dimensi 3D atau penetapan golongan otomatis.
 
-| File | Fungsi |
-| --- | --- |
-| `index.html` | Empat panel pemeriksaan, dialog, dan header |
-| `src/styles.css` | Desain responsif dan tata letak cetak |
-| `src/app.js` | Kamera, unggah, input operator, riwayat, dan cetak |
-| `src/tickets.js` | Validasi, nomor tiket, dan pemulihan riwayat |
-| `assets/camera-demo.svg` | Ilustrasi kamera lokal, tanpa aset eksternal |
-| `server.mjs` | Server pratinjau lokal tanpa dependensi |
+`npm run dev` / `npm start` di folder ini sekarang juga menjalankan Flask, menggunakan `.venv-web` atau executable dari `WEB_PYTHON`. Node bukan server statis terpisah. Node tidak wajib jika menjalankan Python langsung.
 
-File frontend dapat dilayani oleh server statis; tidak ada langkah build yang diperlukan.
+## Windows
+
+Dari root repo, setup dan jalankan web:
+
+```powershell
+py -3.11 -m venv .venv-web
+.\.venv-web\Scripts\python.exe -m pip install -r apps/web-monitoring/requirements.txt
+.\.venv-web\Scripts\python.exe apps/web-monitoring/app.py
+```
+
+Di terminal kedua: `py -3.11 scripts/start_pcv.py`. PCV membutuhkan environment inference/training dan model ekspor yang sesuai; lihat panduan computer vision untuk setup Windows.
+
+## Pemeriksaan koneksi
+
+- http://localhost:5000/api/cv/health harus berisi `status: ready` dan daftar kelas jika PCV sudah siap.
+- Bila muncul **PCV belum terhubung**, periksa terminal PCV dan pastikan port 8000 belum dipakai aplikasi lain.
+- Bila model belum diekspor, gunakan config dengan `run_dir` yang benar atau export/import model terlebih dahulu.
+- Browser mengirim gambar ke web; web meneruskannya ke `CV_API_URL` (default `http://127.0.0.1:8000`). Ini menghindari perbedaan origin port 5000/4173 dan alamat loopback komputer browser.
+- `WEB_HOST` dan `WEB_PORT` mengatur listener web (default `0.0.0.0:5000`). Variabel tersebut dibaca dari environment proses, bukan otomatis dari `.env`.
+- Untuk kamera, buka localhost pada komputer kamera atau gunakan HTTPS. Alamat IP LAN lewat HTTP biasanya tidak mendapat izin kamera dari browser.
+- PCV mengenali jenis kendaraan; ketepatan hasil bergantung pada model/data, bukan koneksi saja. Layar kosong abu-abu wajar menghasilkan nol deteksi.
+
+Integrasi ESP32/load cell/gate belum diverifikasi pada tahap ini. Endpoint IoT lama dipertahankan. Tidak ada perintah perangkat yang dikirim oleh modul kamera atau pemeriksaan health PCV. Model anomali dan MySQL bersifat terpisah; dependensi/koneksinya tidak wajib untuk kamera PCV.
+
+## Tes
+
+```bash
+PYTHONPATH=apps/web-monitoring .venv-web/bin/python -m unittest discover -s apps/web-monitoring/tests -p 'test_*.py' -v
+```
+
+Dari folder web, `npm run check` memeriksa sintaks JavaScript dan `npm test` menjalankan tes tiket. Tes penghubung PCV memeriksa render halaman/modul, forwarding gambar, batas ukuran, respons model tidak valid dan pesan saat PCV mati.

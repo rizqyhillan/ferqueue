@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from time import perf_counter
@@ -11,7 +12,7 @@ from .__main__ import load_config
 from .training import detect, load_detector
 
 ROOT = Path.cwd()
-CONFIG = load_config("configs/training-coco-bn.json", ROOT)
+CONFIG = load_config(os.environ.get("CV_CONFIG_PATH", "configs/training-coco-bn.json"), ROOT)
 
 CONFIDENCE = 0.25
 NMS_IOU = 0.45

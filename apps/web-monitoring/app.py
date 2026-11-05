@@ -1,17 +1,23 @@
 from datetime import datetime
 import os
 from flask import Flask, jsonify, request, render_template, send_from_directory
-from flask_cors import CORS
-import joblib
-import numpy as np
+from cv_bridge import cv_api
+
+# Kamera dan dashboard dapat berjalan tanpa paket model anomali.
+try:
+    import joblib
+    import numpy as np
+except ImportError:
+    joblib = None
+    np = None
 
 # Import modul aturan & ekstraksi fitur (menggunakan core_diecast.py untuk skala Hot Wheels)
 try:
     from core_diecast import cek_aturan, feat, skor
     print("[OK] Memuat aturan diecast dari core_diecast.py")
 except ImportError:
-    from core import cek_aturan, feat, skor
-    print("[WARN] core_diecast.py tidak ditemukan, fallback ke core.py")
+    cek_aturan = feat = skor = None
+    print("[INFO] Evaluasi anomali tidak aktif; kamera PCV tetap tersedia.")
 
 # Import modul database MySQL (db.py)
 try:
@@ -25,7 +31,7 @@ except ImportError:
 
 # Inisialisasi Flask (menggunakan folder templates dan static yang sudah dibuat)
 app = Flask(__name__, template_folder="templates", static_folder="static")
-CORS(app)
+app.register_blueprint(cv_api)
 
 # ------------------------------------------------------------------
 # 1. Load Model & Scaler Machine Learning (Model Diecast)
@@ -37,6 +43,8 @@ MODEL_FILE_NAME = "model_anomali_diecast.joblib"
 
 try:
     model_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), MODEL_FILE_NAME)
+    if joblib is None:
+        raise ImportError("Paket model anomali belum dipasang")
     saved_data = joblib.load(model_file)
     scaler = saved_data["scaler"]
     models = saved_data["models"]
@@ -95,7 +103,7 @@ def serve_static_files(filename):
 # ==================================================================
 @app.route("/predict/<model_type>", methods=["POST"])
 def predict(model_type):
-    if not models or not scaler:
+    if not models or not scaler or cek_aturan is None:
         return (
             jsonify({"error": "Model Machine Learning belum dimuat di server"}),
             500,
@@ -357,4 +365,5 @@ def tare():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host=os.environ.get("WEB_HOST", "0.0.0.0"),
+            port=int(os.environ.get("WEB_PORT", "5000")), debug=False)

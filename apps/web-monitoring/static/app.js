@@ -1,23 +1,26 @@
 import { STORAGE_KEY, MAX_HISTORY, CATEGORIES, categoryInfo, createTicket, formatWeight, normalizeDriver, parseHistory, validateInspection } from './tickets.js';
 
+import './live_detection.js';
+
 const $ = selector => document.querySelector(selector);
-const state = { 
-  weight: 0, 
-  category: 'VI B', 
-  vehicleStatus: 'Normal', 
-  confirmed: false, 
-  issued: null, 
-  history: [], 
-  stream: null, 
-  imageUrl: null, 
-  cameraMode: 'demo', 
-  pendingIssue: false, 
-  sensorLive: false, 
+const state = {
+  weight: 0,
+  category: '',
+  vehicleStatus: 'Normal',
+  confirmed: false,
+  issued: null,
+  history: [],
+  stream: null,
+  imageUrl: null,
+  cameraMode: 'demo',
+  pendingIssue: false,
+  sensorLive: false,
   manualWeightOverride: false,
-  length: '7,20',
-  width: '2,50',
-  height: '3,10',
-  vehicleType: 'Truk angkutan barang',
+  cvActive: false,
+  length: '—',
+  width: '—',
+  height: '—',
+  vehicleType: 'Belum ada hasil deteksi',
   anomalyScore: 0
 };
 
@@ -32,10 +35,10 @@ let toastTimer;
 let captureTimer;
 let storageAvailable = true;
 
-try { 
-  state.history = parseHistory(localStorage.getItem(STORAGE_KEY)); 
-} catch { 
-  storageAvailable = false; 
+try {
+  state.history = parseHistory(localStorage.getItem(STORAGE_KEY));
+} catch {
+  storageAvailable = false;
 }
 
 function element(tag, className, value) {
@@ -75,10 +78,10 @@ function updateClock() {
 
 function renderInspection() {
   const category = categoryInfo(state.category);
-  
+
   if ($('#weight-value')) $('#weight-value').textContent = state.weight === null ? '—' : formatWeight(state.weight);
   if ($('.weight-reading')) $('.weight-reading').classList.toggle('long-reading', state.weight >= 100000);
-  
+
   if ($('#weight-source')) {
     $('#weight-source').textContent = state.manualWeightOverride
       ? 'Input operator'
@@ -99,8 +102,8 @@ function renderInspection() {
       : 'STANDBY';
   }
 
-  if ($('#class-source')) $('#class-source').textContent = state.confirmed ? 'Dipilih operator' : state.category ? 'Sistem / ML API' : 'Menunggu input';
-  
+  if ($('#class-source')) $('#class-source').textContent = state.confirmed ? 'Dipilih operator' : 'Pilih golongan sesuai jenis kendaraan';
+
   if ($('#class-value')) {
     $('#class-value').replaceChildren();
     if (category) {
@@ -113,7 +116,7 @@ function renderInspection() {
       $('#class-value').textContent = state.category || '—';
     }
   }
-  
+
   if ($('#class-description')) $('#class-description').textContent = category?.label || 'Kendaraan Teridentifikasi';
 
   if ($('#dim-length')) $('#dim-length').replaceChildren(document.createTextNode(`${state.length} `), element('small', '', 'cm'));
@@ -138,7 +141,7 @@ function renderInspection() {
 
   const dimStatus = $('#dim-status');
   if (dimStatus) {
-    dimStatus.textContent = state.vehicleStatus;
+    dimStatus.textContent = 'Dimensi belum tersedia';
     dimStatus.className = isAnomaly ? 'status-anomaly' : 'status-normal';
   }
 
@@ -173,7 +176,7 @@ async function fetchStatusKendaraanFromBackend() {
     const data = await res.json();
 
     // 1. Format label Jenis Kendaraan
-    if (data.jenis) {
+    if (data.jenis && data.waktu && !state.cvActive) {
       const jenisRaw = data.jenis.toLowerCase().trim();
       let labelJenis = '';
 
@@ -208,21 +211,21 @@ async function fetchStatusKendaraanFromBackend() {
     }
 
     // 3. Pembacaan DIMENSI (P, L, T) dari Postman / Sistem
-    if (data.P !== undefined && data.P !== null) {
+    if (Number(data.P) > 0) {
       const numP = Number(data.P);
       state.length = !Number.isNaN(numP) ? numP.toFixed(2).replace('.', ',') : String(data.P).replace('.', ',');
     }
-    if (data.L !== undefined && data.L !== null) {
+    if (Number(data.L) > 0) {
       const numL = Number(data.L);
       state.width = !Number.isNaN(numL) ? numL.toFixed(2).replace('.', ',') : String(data.L).replace('.', ',');
     }
-    if (data.T !== undefined && data.T !== null) {
+    if (Number(data.T) > 0) {
       const numT = Number(data.T);
       state.height = !Number.isNaN(numT) ? numT.toFixed(2).replace('.', ',') : String(data.T).replace('.', ',');
     }
 
     // 4. Pembacaan GOLONGAN & STATUS ANOMALI
-    if (data.golongan && data.golongan !== '-') {
+    if (!state.confirmed && categoryInfo(data.golongan)) {
       state.category = data.golongan;
     }
 
@@ -332,14 +335,14 @@ function issueTicket() {
     const fresh = parseHistory(localStorage.getItem(STORAGE_KEY));
     state.history = parseHistory(JSON.stringify([...fresh, ...state.history]));
   } catch { storageAvailable = false; }
-  
+
   const ticket = createTicket(inspection, state.history);
   state.history = [ticket, ...state.history].slice(0, MAX_HISTORY);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.history));
     storageAvailable = true;
   } catch { storageAvailable = false; }
-  
+
   state.issued = ticket;
   $('#driver-input').value = ticket.driver || ticket.plate;
   renderInspection();
@@ -365,9 +368,9 @@ if ($('#next-vehicle')) {
   $('#next-vehicle').addEventListener('click', () => {
     state.issued = null;
     state.manualWeightOverride = false;
-    state.category = 'VI B';
+    state.category = '';
     state.vehicleStatus = 'Normal';
-    state.vehicleType = 'Truk angkutan barang';
+    state.vehicleType = 'Belum ada hasil deteksi';
     state.confirmed = false;
     if ($('#driver-input')) $('#driver-input').value = '';
     if ($('#driver-error')) $('#driver-error').hidden = true;
@@ -495,7 +498,11 @@ function resetCameraPreview() {
   stopCamera();
   clearUploadedImage();
   state.cameraMode = 'demo';
+  state.cvActive = false;
+  state.vehicleType = 'Belum ada hasil deteksi';
+  window.dispatchEvent(new Event('ferqueue:camera-reset'));
   if ($('#camera-image')) {
+    $('#camera-image').dataset.pcv = 'false';
     $('#camera-image').src = './assets/camera-demo.svg';
     $('#camera-image').alt = 'Ilustrasi contoh truk di jalur pemeriksaan, bukan siaran langsung';
     $('#camera-image').hidden = false;
@@ -511,11 +518,11 @@ function updateCameraLabels() {
   if ($('#camera-view-label')) $('#camera-view-label').textContent = demo ? 'TAMPAK SAMPING' : live ? 'SIARAN LANGSUNG' : 'PRATINJAU GAMBAR';
   if ($('#activate-camera span')) $('#activate-camera span').textContent = live ? 'Matikan kamera' : 'Aktifkan kamera';
   if ($('#vehicle-summary-label')) $('#vehicle-summary-label').textContent = 'JENIS KENDARAAN';
-  
+
   if ($('#vehicle-summary')) $('#vehicle-summary').textContent = state.vehicleType || 'Kendaraan Terdeteksi';
-  
+
   if ($('#visual-badge')) $('#visual-badge').textContent = demo ? 'DATA CONTOH' : 'LIVE API';
-  if ($('#camera-message')) $('#camera-message').textContent = demo ? 'Kamera perangkat dapat diaktifkan secara manual.' : 'Gambar ditinjau manual. Deteksi dan pengukuran otomatis terhubung ke sistem API.';
+  if ($('#camera-message')) $('#camera-message').textContent = demo ? 'Kamera perangkat dapat diaktifkan secara manual.' : 'Menghubungkan PCV untuk mengenali jenis kendaraan…';
   if ($('#snapshot-label')) $('#snapshot-label').hidden = true;
 }
 
@@ -578,6 +585,7 @@ if ($('#image-upload')) {
       state.imageUrl = url;
       state.cameraMode = 'upload';
       if ($('#camera-image')) {
+        $('#camera-image').dataset.pcv = 'true';
         $('#camera-image').src = url;
         $('#camera-image').alt = `Gambar kendaraan yang diunggah: ${file.name}`;
         $('#camera-image').hidden = false;
@@ -649,3 +657,14 @@ setInterval(updateClock, 1000);
 
 fetchStatusKendaraanFromBackend();
 setInterval(fetchStatusKendaraanFromBackend, 1000);
+window.addEventListener('ferqueue:cv-result', event => {
+  state.cvActive = true;
+  state.vehicleType = event.detail.detections.length
+    ? [...new Set(event.detail.detections.map(item => item.class_name))].join(', ')
+    : 'Belum ada kendaraan terdeteksi';
+  renderInspection();
+});
+window.addEventListener('ferqueue:cv-error', () => {
+  state.cvActive = true;
+  state.vehicleType = 'Deteksi belum tersedia';
+});
