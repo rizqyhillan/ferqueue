@@ -12,8 +12,9 @@ from .dataset import IMAGE_EXTENSIONS
 
 def annotation_paths(config, root):
     annotations = config.get('coco_annotations')
-    if not isinstance(annotations, dict) or set(annotations) != {'train', 'test'}:
-        raise ValueError('coco_annotations harus berisi path JSON train dan test saja.')
+    expected = {'train', 'test'}
+    if not isinstance(annotations, dict) or set(annotations) != expected:
+        raise ValueError(f'coco_annotations harus berisi path JSON untuk {sorted(expected)}.')
     paths = {}
     for split, value in annotations.items():
         if not isinstance(value, str) or not value.strip():
@@ -22,7 +23,7 @@ def annotation_paths(config, root):
         if path.is_absolute() or not (root / path).resolve().is_relative_to(root.resolve()):
             raise ValueError(f'coco_annotations.{split} harus berupa path di dalam repo.')
         paths[split] = root / path
-    if paths['train'].resolve() == paths['test'].resolve():
+    if len({path.resolve() for path in paths.values()}) != len(paths):
         raise ValueError('JSON COCO train dan test harus berbeda.')
     return paths
 
@@ -68,14 +69,16 @@ def collect_coco_dataset(config, root):
                           'sha256': hashlib.sha256(content).hexdigest()}
 
     categories = _categories(documents['train'], sources['train']['path'])
-    if _categories(documents['test'], sources['test']['path']) != categories:
-        raise ValueError('Pemetaan ID/nama kategori COCO train dan test berbeda.')
+    for split in set(documents) - {'train'}:
+        if _categories(documents[split], sources[split]['path']) != categories:
+            raise ValueError(f'Pemetaan ID/nama kategori COCO train dan {split} berbeda.')
     category_ids = sorted(categories)
     class_ids = {category_id: index for index, category_id in enumerate(category_ids, 1)}
     classes = [categories[category_id] for category_id in category_ids]
 
     splits, seen_paths, seen_hashes = {}, set(), {}
-    for split in ('train', 'test'):
+    seen_groups = {}
+    for split in documents:
         document = documents[split]
         images, annotations = document.get('images'), document.get('annotations')
         if not isinstance(images, list) or not images or not isinstance(annotations, list):
@@ -112,9 +115,17 @@ def collect_coco_dataset(config, root):
                 raise ValueError(f'Gambar COCO duplikat: {name} dan {seen_hashes[digest]}.')
             seen_paths.add(path)
             seen_hashes[digest] = name
+            group = image.get('group_id', relative.parts[0] if len(relative.parts) > 1 else relative.stem)
+            if not isinstance(group, str) or not group.strip():
+                raise ValueError(f'COCO {split}: group_id harus string yang tidak kosong: {name}.')
+            # Only assert explicit group_id: external COCO directories may be class folders.
+            if 'group_id' in image:
+                if group in seen_groups and seen_groups[group] != split:
+                    raise ValueError(f'Kelompok COCO bocor antar-split: {group}.')
+                seen_groups[group] = split
             by_id[image_id] = {'image': path.relative_to(root).as_posix(), 'sha256': digest,
                                'width': width, 'height': height,
-                               'group': relative.parts[0] if len(relative.parts) > 1 else relative.stem,
+                               'group': group,
                                'boxes': []}
 
         annotation_ids = set()

@@ -1,11 +1,7 @@
 import importlib.util
-from pathlib import Path
 import unittest
 
-path = Path(__file__).resolve().parents[3] / 'scripts/diagnose_model.py'
-spec = importlib.util.spec_from_file_location('diagnose_model', path)
-diagnosis = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(diagnosis)
+from ferqueue_cv import diagnostics as diagnosis
 
 
 @unittest.skipUnless(importlib.util.find_spec('numpy'), 'Tes pembandingan bobot memerlukan NumPy.')

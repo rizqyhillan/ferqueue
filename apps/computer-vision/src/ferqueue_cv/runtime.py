@@ -44,5 +44,5 @@ def use_cpu():
 def model_template(root):
     template = root / '.cache/tensorflow-models/research/object_detection/configs/tf2/ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8.config'
     if not template.is_file():
-        raise ValueError('Sumber Object Detection API belum siap. Jalankan bash scripts/cv.sh setup di Linux.')
+        raise ValueError('Sumber Object Detection API belum siap. Ikuti instalasi manual di docs/PCV_MANUAL.md bagian 3.')
     return template

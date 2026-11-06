@@ -1,2 +1,2 @@
--r requirements-training.txt
+-r training.txt
 tensorflow[and-cuda]==2.15.1

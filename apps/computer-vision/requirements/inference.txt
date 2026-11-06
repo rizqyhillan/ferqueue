@@ -2,3 +2,4 @@
 tensorflow==2.15.1
 numpy==1.26.4
 Pillow==10.4.0
+opencv-python==4.10.0.84

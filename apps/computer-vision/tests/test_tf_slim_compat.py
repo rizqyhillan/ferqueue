@@ -3,10 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-script = Path(__file__).resolve().parents[3] / 'scripts/fix_tf_slim.py'
-spec = importlib.util.spec_from_file_location('ferqueue_fix_tf_slim', script)
-compat = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(compat)
+from ferqueue_cv import compat
 
 
 class SlimCompatibilityTests(unittest.TestCase):

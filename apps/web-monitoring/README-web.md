@@ -1,68 +1,69 @@
 # FERQUEUE — kamera web dan PCV
 
-Alur aktif: kamera/unggah gambar → Flask `/api/detect` → model PCV lokal → bounding box, kelas Mobil/Truk/Bus dan confidence pada web. Golongan dipilih operator lewat **Ubah**. Dimensi belum diukur. Kamera ini tidak memerlukan ESP32, MySQL atau model anomali.
+Alur kamera/unggah: browser → Flask `/api/detect` → API PCV → kelas, confidence, dan bounding box pada web. Golongan dipilih operator. Kamera PCV dapat berjalan tanpa database, ESP32, atau model anomali.
 
-## Menjalankan di Linux (dari root repo)
+Ikuti **[panduan PCV manual](../../docs/PCV_MANUAL.md)** untuk memasang dependensi dan menyiapkan model. Model pada config yang dipilih harus sudah diekspor atau diimpor.
 
-Setup web sekali:
+## Linux
 
-```bash
+Dari root repo, buat environment web jika belum ada:
+
+```text
 python3 -m venv .venv-web
 .venv-web/bin/python -m pip install -r apps/web-monitoring/requirements.txt
 ```
 
-Terminal pertama — web:
+Terminal pertama — PCV, memakai environment Python PCV yang sudah dipasang:
 
-```bash
+```text
+source .venv-pcv/bin/activate
+python pcv.py serve --config apps/computer-vision/configs/coco.json
+```
+
+Tunggu **API siap**. Terminal kedua — Flask:
+
+```text
 .venv-web/bin/python apps/web-monitoring/app.py
 ```
 
-Terminal kedua — PCV:
-
-```bash
-python3 scripts/start_pcv.py
-```
-
-Launcher PCV memakai `.venv-training` atau `.venv-inference` yang sudah ada dan memilih model melalui `configs/training-coco-bn.json`. Tunggu pesan **API siap**. Untuk model dari eksperimen lain:
-
-```bash
-python3 scripts/start_pcv.py --config configs/training.json
-```
-
-Model harus sudah diekspor pada `run_dir` config terpilih. Bila belum ada environment/model, ikuti panduan computer vision untuk setup dan export/import terlebih dahulu. Launcher tidak melakukan training atau unduhan otomatis.
-
-Buka **http://localhost:5000**, klik **Aktifkan kamera**, dan izinkan akses kamera. Bisa juga klik **Unggah** untuk menguji JPG/PNG/WebP. Hasil pada gambar unggahan dipertahankan sampai gambar diganti; kamera live memperbarui hasil setiap frame selesai diproses. Gambar diperkecil hingga sisi terpanjang 640 piksel sebelum dikirim. Tidak ada pengukuran dimensi 3D atau penetapan golongan otomatis.
-
-`npm run dev` / `npm start` di folder ini sekarang juga menjalankan Flask, menggunakan `.venv-web` atau executable dari `WEB_PYTHON`. Node bukan server statis terpisah. Node tidak wajib jika menjalankan Python langsung.
+Buka [dashboard](http://localhost:5000). Uji **Unggah** dahulu, lalu **Aktifkan kamera** dan izinkan akses kamera. Frame diperkecil hingga sisi terpanjang 640 piksel sebelum dikirim.
 
 ## Windows
 
-Dari root repo, setup dan jalankan web:
+Dari root repo:
 
-```powershell
+```text
 py -3.11 -m venv .venv-web
 .\.venv-web\Scripts\python.exe -m pip install -r apps/web-monitoring/requirements.txt
 .\.venv-web\Scripts\python.exe apps/web-monitoring/app.py
 ```
 
-Di terminal kedua: `py -3.11 scripts/start_pcv.py`. PCV membutuhkan environment inference/training dan model ekspor yang sesuai; lihat panduan computer vision untuk setup Windows.
+Di terminal lain, gunakan environment PCV/inference yang sudah dipasang:
 
-## Pemeriksaan koneksi
+```text
+.\.venv-pcv\Scripts\python.exe pcv.py serve --config apps/computer-vision/configs/coco.json
+```
 
-- http://localhost:5000/api/cv/health harus berisi `status: ready` dan daftar kelas jika PCV sudah siap.
-- Bila muncul **PCV belum terhubung**, periksa terminal PCV dan pastikan port 8000 belum dipakai aplikasi lain.
-- Bila model belum diekspor, gunakan config dengan `run_dir` yang benar atau export/import model terlebih dahulu.
-- Browser mengirim gambar ke web; web meneruskannya ke `CV_API_URL` (default `http://127.0.0.1:8000`). Ini menghindari perbedaan origin port 5000/4173 dan alamat loopback komputer browser.
-- `WEB_HOST` dan `WEB_PORT` mengatur listener web (default `0.0.0.0:5000`). Variabel tersebut dibaca dari environment proses, bukan otomatis dari `.env`.
-- Untuk kamera, buka localhost pada komputer kamera atau gunakan HTTPS. Alamat IP LAN lewat HTTP biasanya tidak mendapat izin kamera dari browser.
-- PCV mengenali jenis kendaraan; ketepatan hasil bergantung pada model/data, bukan koneksi saja. Layar kosong abu-abu wajar menghasilkan nol deteksi.
+Jika model diterima dari komputer lain, berikan config penerima yang sudah dipakai saat `import-model`.
 
-Integrasi ESP32/load cell/gate belum diverifikasi pada tahap ini. Endpoint IoT lama dipertahankan. Tidak ada perintah perangkat yang dikirim oleh modul kamera atau pemeriksaan health PCV. Model anomali dan MySQL bersifat terpisah; dependensi/koneksinya tidak wajib untuk kamera PCV.
+## Koneksi dan parameter
 
-## Tes
+- [Health PCV](http://127.0.0.1:8000/health) dan [health melalui Flask](http://localhost:5000/api/cv/health) harus berisi `status: ready`, kelas, checkpoint, preprocessing, serta threshold yang sesuai.
+- Confidence threshold, NMS, dan jumlah deteksi dibaca dari config JSON. Restart API setelah mengubahnya. Preprocessing mengikuti metadata model hasil training.
+- Browser mengirim gambar ke Flask pada origin yang sama. Flask meneruskan gambar ke `CV_API_URL`, default `http://127.0.0.1:8000` pada mesin server.
+- Untuk mengganti port PCV, gunakan `python pcv.py serve --port 8001` dan set `CV_API_URL=http://127.0.0.1:8001` pada environment proses Flask.
+- `WEB_HOST` dan `WEB_PORT` mengatur Flask. File `.env` tidak dimuat otomatis.
+- Kamera memerlukan localhost pada komputer kamera atau HTTPS. Alamat IP LAN melalui HTTP biasanya tidak mendapat izin kamera.
+- Deteksi kosong bisa terjadi karena gambar tidak berisi objek target atau model/threshold belum sesuai; periksa hasil test dan gambar yang jelas.
 
-```bash
+Dimensi panjang/lebar/tinggi fisik belum dihitung. Integrasi ESP32/load cell/gate belum diverifikasi pada tahap ini. Model anomali dan MySQL bersifat terpisah dari jalur kamera.
+
+Node tidak wajib. `npm run dev`/`npm start` tetap dapat menjalankan Flask menggunakan `.venv-web` atau `WEB_PYTHON`.
+
+## Tes penghubung web
+
+```text
 PYTHONPATH=apps/web-monitoring .venv-web/bin/python -m unittest discover -s apps/web-monitoring/tests -p 'test_*.py' -v
 ```
 
-Dari folder web, `npm run check` memeriksa sintaks JavaScript dan `npm test` menjalankan tes tiket. Tes penghubung PCV memeriksa render halaman/modul, forwarding gambar, batas ukuran, respons model tidak valid dan pesan saat PCV mati.
+Tes memeriksa halaman/modul kamera, forwarding gambar, batas ukuran, dan penanganan PCV offline. Dari folder web, `npm run check` memeriksa sintaks JavaScript dan `npm test` menjalankan tes tiket.

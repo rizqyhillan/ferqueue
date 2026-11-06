@@ -85,6 +85,18 @@ class CocoMetricsTests(unittest.TestCase):
             self.assertEqual(report['checkpoint'], 'ckpt-12')
             self.assertAlmostEqual(report['metrics']['DetectionBoxes_PerformanceByCategory/mAP/Mobil'], 1)
 
+            # Default evaluation must use test and retain low confidence
+            # predictions for COCO AP, independently of display filtering.
+            result['detection_scores'] = np.array([.1])
+            with patch('ferqueue_cv.training.load_detector', return_value=(object(), {'manifest': manifest}, {'checkpoint': 'ckpt-12'})), \
+                    patch('ferqueue_cv.training.detect', return_value=result), redirect_stdout(io.StringIO()):
+                evaluate({'run_dir': 'models/run', 'confidence_threshold': .99}, root)
+            tested = json.loads((root / 'models/run/reports/ckpt-12-test.json').read_text())
+            self.assertEqual(tested['split'], 'test')
+            self.assertAlmostEqual(tested['metrics']['DetectionBoxes_PerformanceByCategory/mAP/Mobil'], 1)
+            with self.assertRaisesRegex(ValueError, 'hanya menggunakan split test'):
+                evaluate({'run_dir': 'models/run'}, root, 'val')
+
 
 if __name__ == '__main__':
     unittest.main()

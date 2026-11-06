@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 .venv-data/
 .venv-cv/
+.venv-pcv/
 .venv-training/
 .venv-tools/
 .venv-inference/

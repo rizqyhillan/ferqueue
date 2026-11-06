@@ -1,3 +1,8 @@
+# Catatan eksperimen PCV
+
+Catatan awal percobaan dari file `test.txt`, dipertahankan sebagai riwayat.
+
+```text
 percobaan per training 
 
 num_steps = 3000
@@ -13,3 +18,4 @@ num_steps = 3000
 num_steps = 9000
 1. prediction-debug2.1 = 0.25
 2. prediction-debug2.1 = 0.28
+```

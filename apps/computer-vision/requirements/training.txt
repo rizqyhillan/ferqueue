@@ -1,3 +1,4 @@
+-r data.txt
 # Python 3.11, Linux x86_64. CPU by default; CUDA extras are optional.
 # TensorBoard 2.15 imports pkg_resources, which is provided by this setuptools release.
 setuptools==80.9.0
@@ -10,9 +11,7 @@ tensorflow-datasets==4.9.3
 tensorflow-metadata==1.14.0
 keras==2.15.0
 tf-keras==2.15.1
-numpy==1.26.4
 protobuf==3.20.3
-Pillow==10.4.0
 tf-slim==1.1.0
 pycocotools==2.0.7
 lvis==0.5.3
@@ -25,4 +24,3 @@ six==1.16.0
 scipy==1.11.4
 matplotlib==3.8.4
 pandas==2.1.4
-opencv-python==4.10.0.84

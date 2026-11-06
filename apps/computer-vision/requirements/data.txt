@@ -1,0 +1,5 @@
+# Dataset checks, preprocessing, and the external YOLO-to-COCO converter.
+Pillow==10.4.0
+numpy==1.26.4
+opencv-python==4.10.0.84
+imagesize==1.4.1

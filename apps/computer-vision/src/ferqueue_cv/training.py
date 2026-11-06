@@ -11,6 +11,8 @@ import urllib.request
 from PIL import Image, ImageDraw, ImageOps
 
 from .dataset import IMAGE_EXTENSIONS, verify_images
+from .processing import preprocess_image
+from .settings import training_identity, training_plan
 
 MODEL_NAME = 'ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8'
 # Use the bucket's canonical HTTPS endpoint; the custom hostname can fail TLS hostname validation.
@@ -30,6 +32,11 @@ def load_manifest(config, root):
         actual = {split: item['path'] for split, item in source['annotations'].items()}
         if expected != actual:
             raise ValueError('Path anotasi COCO berbeda dari manifest. Gunakan prepared_dir baru dan jalankan prepare.')
+    if set(manifest['splits']) != {'train', 'test'}:
+        raise ValueError('Split konfigurasi berbeda dari manifest. Gunakan prepared_dir dan run_dir baru.')
+    for key in ('seed', 'train_ratio', 'test_ratio'):
+        if config.get(key) != manifest.get(key):
+            raise ValueError(f'{key} berbeda dari manifest. Gunakan prepared_dir dan run_dir baru.')
     verify_images(manifest, root)
     return manifest
 
@@ -49,16 +56,17 @@ def _floats(values):
     return tf.train.Feature(float_list=tf.train.FloatList(value=values))
 
 
-def write_records(manifest, directory, root):
+def write_records(manifest, directory, root, preprocessing=None):
     import tensorflow as tf
     directory.mkdir(parents=True, exist_ok=True)
     for split, rows in manifest['splits'].items():
-        with tf.io.TFRecordWriter(str(directory / f'{split}.tfrecord')) as writer:
+        temporary = directory / f'{split}.tfrecord.partial'
+        with tf.io.TFRecordWriter(str(temporary)) as writer:
             for row in rows:
-                # Normalize to JPEG/RGB without resizing or changing box coordinates.
+                # Lossless RGB keeps training/evaluation transforms consistent.
                 buffer = io.BytesIO()
                 with Image.open(root / row['image']) as image:
-                    image.convert('RGB').save(buffer, format='JPEG', quality=95)
+                    preprocess_image(image, preprocessing).save(buffer, format='PNG')
                 boxes = row['boxes']
                 example = tf.train.Example(features=tf.train.Features(feature={
                     'image/height': _ints([row['height']]),
@@ -66,7 +74,7 @@ def write_records(manifest, directory, root):
                     'image/filename': _bytes([row['image'].encode()]),
                     'image/source_id': _bytes([row['sha256'].encode()]),
                     'image/encoded': _bytes([buffer.getvalue()]),
-                    'image/format': _bytes([b'jpeg']),
+                    'image/format': _bytes([b'png']),
                     'image/object/bbox/xmin': _floats([b['xmin'] for b in boxes]),
                     'image/object/bbox/xmax': _floats([b['xmax'] for b in boxes]),
                     'image/object/bbox/ymin': _floats([b['ymin'] for b in boxes]),
@@ -76,6 +84,7 @@ def write_records(manifest, directory, root):
                     'image/object/is_crowd': _ints([0] * len(boxes)),
                 }))
                 writer.write(example.SerializeToString())
+        temporary.replace(directory / f'{split}.tfrecord')
 
 
 def download_pretrained(root):
@@ -116,7 +125,8 @@ def make_pipeline(config, manifest, pretrained, run):
     pipeline.model.ssd.freeze_batchnorm = config.get('freeze_batchnorm', True)
     train = pipeline.train_config
     train.batch_size = config['batch_size']
-    train.num_steps = config['num_steps']
+    steps = training_plan(config, manifest)['num_steps']
+    train.num_steps = steps
     train.fine_tune_checkpoint = str(pretrained / 'checkpoint/ckpt-0')
     train.fine_tune_checkpoint_type = 'detection'
     train.fine_tune_checkpoint_version = train_pb2.CheckpointVersion.V2
@@ -128,10 +138,18 @@ def make_pipeline(config, manifest, pretrained, run):
     momentum.momentum_optimizer_value = 0.9
     schedule = momentum.learning_rate.cosine_decay_learning_rate
     schedule.learning_rate_base = config['learning_rate']
-    schedule.total_steps = config['num_steps']
-    schedule.warmup_steps = min(100, config['num_steps'] // 10)
+    schedule.total_steps = steps
+    schedule.warmup_steps = min(100, steps // 10)
     schedule.warmup_learning_rate = config['learning_rate'] / 10
     train.optimizer.use_moving_average = False
+    if 'augmentation' in config:
+        # Replace inherited COCO augmentation explicitly for reproducible experiments.
+        del train.data_augmentation_options[:]
+        augmentation = config['augmentation']
+        if augmentation.get('horizontal_flip', False):
+            train.data_augmentation_options.add().random_horizontal_flip.SetInParent()
+        if augmentation.get('brightness_delta', 0):
+            train.data_augmentation_options.add().random_adjust_brightness.max_delta = augmentation['brightness_delta']
     train.max_number_of_boxes = max(100, max(len(row['boxes']) for row in manifest['splits']['train']))
     label_map = str(run / 'label_map.pbtxt')
     pipeline.train_input_reader.label_map_path = label_map
@@ -150,31 +168,45 @@ def make_pipeline(config, manifest, pretrained, run):
     (run / 'pipeline.config').write_text(text_format.MessageToString(pipeline), encoding='utf-8')
 
 
-def train(config, root):
+def build_records(config, root):
     manifest = load_manifest(config, root)
     run = root / config['run_dir']
     # Store exact inputs so accidentally changed labels/settings cannot resume an old run.
     frozen = {'config': config, 'manifest': manifest, 'model': MODEL_NAME}
     serialized = json.dumps(frozen, sort_keys=True, ensure_ascii=False, indent=2)
     signature = run / 'inputs.json'
-    if signature.is_file() and signature.read_text(encoding='utf-8') != serialized:
-        raise ValueError('Config/dataset berbeda dari run ini. Ganti run_dir untuk eksperimen baru.')
+    if signature.is_file():
+        previous = json.loads(signature.read_text(encoding='utf-8'))
+        previous['config'] = training_identity(previous['config'])
+        identity = {**frozen, 'config': training_identity(config)}
+        if previous != identity:
+            raise ValueError('Config/dataset berbeda dari run ini. Ganti run_dir untuk eksperimen baru.')
     if run.exists() and any(run.iterdir()) and not signature.is_file():
         raise ValueError('run_dir sudah berisi file tanpa metadata. Pilih run_dir baru.')
-    pretrained = download_pretrained(root)
+    plan = training_plan(config, manifest)
     run.mkdir(parents=True, exist_ok=True)
-    signature.write_text(serialized, encoding='utf-8')
+    if not signature.exists():
+        signature.write_text(serialized, encoding='utf-8')
+    (run / 'training-plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
     label_map = ''.join(f'item {{ id: {index} name: {json.dumps(name, ensure_ascii=False)} }}\n'
                         for index, name in enumerate(manifest['classes'], 1))
     (run / 'label_map.pbtxt').write_text(label_map, encoding='utf-8')
-    write_records(manifest, run / 'records', root)
+    if not all((run / 'records' / f'{split}.tfrecord').is_file() for split in manifest['splits']):
+        write_records(manifest, run / 'records', root, config.get('preprocessing'))
+    print(f'TFRecord dan label map siap: {run}; {plan["num_steps"]} langkah training.', flush=True)
+    return manifest, run, plan
+
+
+def train(config, root):
+    manifest, run, plan = build_records(config, root)
+    pretrained = download_pretrained(root)
     make_pipeline(config, manifest, pretrained, run)
     (run / 'training').mkdir(exist_ok=True)
     # Official training entry point resumes from the latest checkpoint in model_dir.
     subprocess.run([sys.executable, '-m', 'object_detection.model_main_tf2',
                     f'--pipeline_config_path={run / "pipeline.config"}',
-                    f'--model_dir={run / "training"}', f'--num_train_steps={config["num_steps"]}',
-                    '--checkpoint_every_n=100', '--alsologtostderr'], check=True)
+                    f'--model_dir={run / "training"}', f'--num_train_steps={plan["num_steps"]}',
+                    f'--checkpoint_every_n={config.get("checkpoint_every_n", 100)}', '--alsologtostderr'], check=True)
 
 
 def export(config, root):
@@ -194,7 +226,8 @@ def export(config, root):
                         f'--output_directory={output}'], check=True)
     frozen = json.loads((run / 'inputs.json').read_text(encoding='utf-8'))
     metadata = {'checkpoint': Path(checkpoint).name, 'saved_model': saved.parent.relative_to(root).as_posix(),
-                'classes': frozen['manifest']['classes'], 'model': MODEL_NAME}
+                'classes': frozen['manifest']['classes'], 'model': MODEL_NAME,
+                'preprocessing': frozen['config'].get('preprocessing', {})}
     (run / 'export.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
     print(f'Model diekspor: {saved.parent}', flush=True)
 
@@ -210,15 +243,17 @@ def load_detector(config, root):
     return model.signatures['serving_default'], frozen, metadata
 
 
-def detect(detector, image):
+def detect(detector, image, preprocessing=None):
     import numpy as np
     import tensorflow as tf
+    image = preprocess_image(image, preprocessing)
     result = detector(tf.convert_to_tensor(np.asarray(image, dtype=np.uint8)[None, ...]))
     count = int(result['num_detections'][0])
     return {key: value[0, :count].numpy() for key, value in result.items() if key != 'num_detections'}
 
 
-def evaluate(config, root, split):
+def evaluate(config, root, split='test'):
+    split = split or 'test'
     if split != 'test':
         raise ValueError('Evaluasi hanya menggunakan split test.')
     import numpy as np
@@ -227,13 +262,15 @@ def evaluate(config, root, split):
     manifest = frozen['manifest']
     if 'splits' not in manifest:
         raise ValueError('Evaluasi berlabel dilakukan di laptop training yang memiliki manifest dan dataset asli.')
+    if split not in manifest['splits']:
+        raise ValueError(f'Split {split} tidak tersedia pada model ini.')
     verify_images(manifest, root)
     categories = [{'id': index, 'name': name} for index, name in enumerate(manifest['classes'], 1)]
     groundtruth = {'info': {}, 'images': [], 'annotations': [], 'categories': categories}
     predictions = []
     for image_id, row in enumerate(manifest['splits'][split], 1):
         with Image.open(root / row['image']) as source:
-            result = detect(detector, source.convert('RGB'))
+            result = detect(detector, source.convert('RGB'), metadata.get('preprocessing'))
         scale = np.array([row['height'], row['width'], row['height'], row['width']])
         boxes = np.array([[b['ymin'], b['xmin'], b['ymax'], b['xmax']] for b in row['boxes']], dtype=np.float32).reshape(-1, 4)
         groundtruth['images'].append({'id': image_id, 'file_name': row['image'],
@@ -263,6 +300,7 @@ def evaluate(config, root, split):
 
 
 def predict(config, root, input_path, output_path):
+    from .postprocessing import select_detections
     detector, frozen, metadata = load_detector(config, root)
     source = root / input_path
     destination = root / output_path
@@ -280,13 +318,12 @@ def predict(config, root, input_path, output_path):
         target.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(path) as raw:
             image = ImageOps.exif_transpose(raw).convert('RGB')
-        result = detect(detector, image)
+        result = detect(detector, image, metadata.get('preprocessing'))
         width, height = image.size
         draw = ImageDraw.Draw(image)
         observations = []
-        for box, score, class_id in zip(result['detection_boxes'], result['detection_scores'], result['detection_classes']):
-            if float(score) < config['confidence_threshold']:
-                continue
+        for selected in select_detections(result, config):
+            box, score, class_id = (result[key][selected] for key in ('detection_boxes', 'detection_scores', 'detection_classes'))
             index = int(class_id)
             if not 1 <= index <= len(classes):
                 continue

@@ -52,6 +52,17 @@ class SharingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'sudah ada'):
             package_model(self.config, self.root, self.archive)
 
+    def test_preprocessing_survives_model_transfer(self):
+        source = self.root / self.config['run_dir'] / 'export.json'
+        metadata = json.loads(source.read_text())
+        metadata['preprocessing'] = {'gamma': .8, 'clahe_clip_limit': 2}
+        source.write_text(json.dumps(metadata))
+        package_model(self.config, self.root, self.archive)
+        receiver = {'run_dir': 'models/processed-receiver'}
+        import_model(receiver, self.root, self.archive)
+        received = json.loads((self.root / receiver['run_dir'] / 'export.json').read_text())
+        self.assertEqual(received['preprocessing'], metadata['preprocessing'])
+
 
 if __name__ == '__main__':
     unittest.main()

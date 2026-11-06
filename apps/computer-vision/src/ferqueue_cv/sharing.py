@@ -17,6 +17,7 @@ def package_model(config, root, archive):
         raise ValueError('Arsip output sudah ada. Pilih nama --archive baru.')
     archive.parent.mkdir(parents=True, exist_ok=True)
     public = {key: metadata[key] for key in ('classes', 'model', 'checkpoint')}
+    public['preprocessing'] = metadata.get('preprocessing', {})
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as handle:
         handle.writestr('model.json', json.dumps(public, ensure_ascii=False, indent=2))
         for path in sorted(model.rglob('*')):
@@ -43,6 +44,8 @@ def import_model(config, root, archive):
         if 'saved_model/saved_model.pb' not in names or not any(name.startswith('saved_model/variables/') for name in names):
             raise ValueError('Arsip SavedModel tidak lengkap.')
         metadata = json.loads(handle.read('model.json').decode('utf-8'))
+        from .settings import validate_processing
+        validate_processing({'preprocessing': metadata.get('preprocessing', {})})
         if not isinstance(metadata['classes'], list) or not metadata['classes'] or any(not isinstance(name, str) or not name for name in metadata['classes']):
             raise ValueError('Daftar kelas model tidak valid.')
         if not re.fullmatch(r'ckpt-\d+', metadata['checkpoint']):

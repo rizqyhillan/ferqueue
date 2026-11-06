@@ -52,8 +52,9 @@ def read_boxes(path, num_classes):
 
 
 def validate_ratios(train_ratio, test_ratio):
+    ratios = (train_ratio, test_ratio)
     if any(type(value) not in (int, float) or not math.isfinite(value) or not 0 < value < 1
-           for value in (train_ratio, test_ratio)) or not math.isclose(train_ratio + test_ratio, 1, rel_tol=0, abs_tol=1e-9):
+           for value in ratios) or not math.isclose(sum(ratios), 1, rel_tol=0, abs_tol=1e-9):
         raise ValueError('Rasio train dan test harus positif, masing-masing < 1, dan jumlahnya 1.')
 
 
@@ -160,7 +161,7 @@ def prepare(config, root):
 
 def verify_images(manifest, root):
     if set(manifest['splits']) != {'train', 'test'} or any(not rows for rows in manifest['splits'].values()):
-        raise ValueError('Manifest harus berisi train dan test saja, keduanya tidak kosong. Jalankan prepare dengan prepared_dir baru dan gunakan run_dir baru.')
+        raise ValueError('Manifest harus berisi train dan test saja, keduanya tidak kosong. Gunakan prepared_dir dan run_dir baru.')
     if manifest.get('source', {}).get('format') == 'coco':
         for source in manifest['source']['annotations'].values():
             path = root / source['path']
