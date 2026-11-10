@@ -1,0 +1,36 @@
+{
+  "dataset_format": "coco",
+  "dataset_dir": "data/raw/vehicles",
+  "coco_annotations": {
+    "train": "data/processed/pcv-coco-v2/annotations/instances_train.json",
+    "test": "data/processed/pcv-coco-v2/annotations/instances_test.json"
+  },
+  "prepared_dir": "data/processed/pcv-coco-manifest-v2",
+  "run_dir": "models/mobilenet/runs/pcv-coco-rtx4060-001",
+  "seed": 42,
+  "train_ratio": 0.7,
+  "test_ratio": 0.3,
+  "batch_size": 4,
+  "epochs": 30,
+  "learning_rate": 0.004,
+  "freeze_batchnorm": true,
+  "checkpoint_every_n": 100,
+  "augmentation": {
+    "horizontal_flip": true,
+    "brightness_delta": 0.1
+  },
+  "preprocessing": {
+    "denoise_kernel": 0,
+    "clahe_clip_limit": 0,
+    "clahe_grid_size": 8,
+    "gamma": 1.0
+  },
+  "segmentation": {
+    "iterations": 5,
+    "morphology_kernel": 3
+  },
+  "confidence_threshold": 0.29,
+  "nms_iou_threshold": 0.45,
+  "max_detections": 10,
+  "class_agnostic_nms": true
+}
