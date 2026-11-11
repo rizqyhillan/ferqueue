@@ -1,6 +1,9 @@
 export const STORAGE_KEY = 'ferqueue.tickets.v1';
 export const MAX_HISTORY = 500;
 export const CATEGORIES = Object.freeze([
+  { code: 'A', label: 'Mobil penumpang' },
+  { code: 'B', label: 'Bus penumpang' },
+  { code: 'C', label: 'Truk barang' },
   { code: 'I', label: 'Sepeda' },
   { code: 'II', label: 'Sepeda motor' },
   { code: 'III', label: 'Sepeda motor besar / roda tiga' },
@@ -24,7 +27,11 @@ export const formatWeight = (weight, fractionDigits = 2) => {
     maximumFractionDigits: fractionDigits,
   }).format(Number(weight));
 };
-export const categoryInfo = code => CATEGORIES.find(category => category.code === code);
+export const categoryInfo = code => {
+  if (!code) return undefined;
+  const trimmed = String(code).trim().toUpperCase();
+  return CATEGORIES.find(category => category.code.toUpperCase() === trimmed);
+};
 export function normalizeDriver(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ');
 }
