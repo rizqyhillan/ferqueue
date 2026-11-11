@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw
 
 from ferqueue_cv.conversion import adopt_coco, stage_yolo
 from ferqueue_cv.dataset import prepare, split_groups, verify_images
-from ferqueue_cv.settings import load_config, training_plan
+from ferqueue_cv.settings import load_config, training_identity, training_plan
 from ferqueue_cv.training import load_manifest
 
 
@@ -150,12 +150,20 @@ class ManualPipelineTests(unittest.TestCase):
         for change in ({'num_steps': 100}, {'epochs': True}, {'nms_iou_threshold': 1.1},
                        {'max_detections': 0}, {'freeze_batchnorm': 'false'},
                        {'preprocessing': {'gamma': 0}}, {'preprocessing': {'crop': True}},
-                       {'segmentation': {'iterations': 0}}, {'augmentation': {'brightness_delta': 2}},
+                       {'augmentation': {'brightness_delta': 2}},
                        {'augmentation': None}, {'val_ratio': None}):
             with self.subTest(change=change):
                 path.write_text(json.dumps({**self.config, **change}))
                 with self.assertRaises(ValueError):
                     load_config(path, self.root)
+
+    def test_legacy_segmentation_setting_is_ignored(self):
+        legacy = {**self.config, 'segmentation': {'iterations': 5, 'morphology_kernel': 3}}
+        path = self.root / 'config.json'
+        path.write_text(json.dumps(legacy))
+        config = load_config(path, self.root)
+        self.assertEqual(config, self.config)
+        self.assertEqual(training_identity(legacy), training_identity(config))
 
     def test_dataset_settings_cannot_silently_reuse_a_manifest(self):
         prepare(self.config, self.root)
@@ -163,27 +171,26 @@ class ManualPipelineTests(unittest.TestCase):
             load_manifest({**self.config, 'seed': 7}, self.root)
 
     @unittest.skipUnless(importlib.util.find_spec('cv2'), 'OpenCV diperlukan untuk pemrosesan citra.')
-    def test_preprocessing_and_grabcut_preview_preserve_geometry(self):
+    def test_preprocessing_preserves_geometry(self):
         import numpy as np
-        from ferqueue_cv.processing import grabcut_mask, preprocess_image, preview_dataset
+        from ferqueue_cv.processing import preprocess_image
         image = Image.new('RGB', (80, 60), 'white')
         ImageDraw.Draw(image).ellipse((25, 20, 55, 40), fill='red')
         processed = preprocess_image(image, {'denoise_kernel': 3, 'clahe_clip_limit': 2, 'gamma': .9})
         self.assertEqual(processed.size, image.size)
         self.assertEqual(processed.mode, 'RGB')
         self.assertFalse(np.array_equal(np.asarray(processed), np.asarray(image)))
-        box = {'xmin': .2, 'ymin': .2, 'xmax': .8, 'ymax': .8}
-        mask, status = grabcut_mask(image, box)
-        self.assertEqual(status, 'approximate_review_required')
-        self.assertEqual(mask.size, image.size)
-        pixels = np.asarray(mask)
-        self.assertTrue(pixels.any())
-        self.assertFalse(pixels[:12].any() or pixels[48:].any() or pixels[:, :16].any() or pixels[:, 64:].any())
+
+    def test_preview_writes_only_full_images_and_boxes(self):
+        from ferqueue_cv.processing import preview_dataset
         prepare(self.config, self.root)
-        report = preview_dataset(self.config, self.root, 'outputs/review', limit=1, segment=True)
-        self.assertFalse(report['used_as_training_masks'])
+        output = self.root / 'outputs/review'
+        report = preview_dataset(self.config, self.root, 'outputs/review', limit=1)
+        self.assertEqual(set(report), {'split', 'preprocessing', 'images'})
         self.assertEqual(len(report['images']), 1)
-        self.assertTrue((self.root / 'outputs/review/report.json').is_file())
+        image = report['images'][0]['image']
+        self.assertEqual({path.relative_to(output).as_posix() for path in output.rglob('*') if path.is_file()},
+                         {'report.json', f'{image}.processed.png', f'{image}.comparison.jpg', f'{image}.boxes.jpg'})
 
     @unittest.skipUnless(importlib.util.find_spec('numpy'), 'NumPy diperlukan untuk NMS.')
     def test_display_filters_share_confidence_nms_and_class_policy(self):

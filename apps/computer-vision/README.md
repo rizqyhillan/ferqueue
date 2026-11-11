@@ -1,6 +1,6 @@
 # PCV FERQUEUE
 
-Mulai dari **[panduan PCV manual](../../docs/PCV_MANUAL.md)** untuk instalasi, dataset, konversi, segmentasi, training, dan web. Seluruh perintah dijalankan dari root FERQUEUE menggunakan `python pcv.py <tahap>` dengan environment Python yang kamu aktifkan sendiri.
+Mulai dari **[panduan PCV manual](../../docs/PCV_MANUAL.md)** untuk instalasi, dataset, konversi, training, dan web. Seluruh perintah dijalankan dari root FERQUEUE menggunakan `python pcv.py <tahap>` dengan environment Python yang kamu aktifkan sendiri. Untuk training GPU di Windows, ikuti [panduan RTX 4060](../../docs/PCV_MANUAL_WINDOWS_RTX4060.md).
 
 ## Struktur
 
@@ -28,7 +28,7 @@ apps/computer-vision/
 | `stage-yolo` | Menyiapkan gambar/label dan daftar train/test converter |
 | `adopt-coco` | Menghubungkan JSON converter ke gambar raw |
 | `prepare` | Membekukan manifest kelas, split, dan hash sumber |
-| `segment`, `preview` | Review mask GrabCut dan pengolahan citra |
+| `preview` | Periksa bounding box label dan hasil preprocessing |
 | `plan`, `build-records` | Anggaran epoch/langkah dan TFRecord |
 | `train`, `export`, `evaluate` | Training TensorFlow, SavedModel, dan metrik test |
 | `predict` | Prediksi file gambar dan penyimpanan bbox/JSON |
@@ -43,7 +43,7 @@ Untuk data YOLO gunakan `--config apps/computer-vision/configs/yolo.json`. Setel
 
 Konversi memakai [Taeyoung96/Yolo-to-COCO-format-converter](https://github.com/Taeyoung96/Yolo-to-COCO-format-converter), yang dijalankan manual lewat `main.py`. Helper FERQUEUE menyiapkan input dan menyesuaikan path hasilnya; bbox tetap berasal dari converter.
 
-Model: SSD MobileNet V2 FPNLite 320×320, TensorFlow 2.15.1, Python 3.11. Hanya ada **train 70% dan test 30% berdasarkan kelompok/sesi**. Tidak ada split validasi. Model memprediksi kelas dan bounding box; mask GrabCut untuk review, dan dimensi fisik memerlukan kalibrasi terpisah.
+Model SSD MobileNet V2 FPNLite 320×320 berjalan dengan TensorFlow 2.15.1 dan Python 3.11. Data dibagi menjadi **train 70% dan test 30% berdasarkan kelompok/sesi**. Model memprediksi kelas dan bounding box. Dimensi fisik memerlukan kalibrasi kamera.
 
 Preprocessing mengikuti metadata model pada evaluasi, prediksi, serta web. Confidence/NMS tampilan mengikuti config yang dipilih. [Tabel parameter](../../docs/PCV_MANUAL.md#13-bagian-yang-bisa-diubah-dan-pengaruhnya) menjelaskan pengaruh dan tahap yang perlu diulang.
 

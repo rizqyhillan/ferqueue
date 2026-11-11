@@ -11,13 +11,13 @@ from .settings import DEFAULT_CONFIG, load_config
 
 def main():
     parser = argparse.ArgumentParser(description='Training deteksi kendaraan dari anotasi YOLO atau COCO JSON.')
-    parser.add_argument('action', choices=['check', 'check-inference', 'fix-tf-slim', 'diagnose', 'serve', 'stage-yolo', 'adopt-coco', 'inspect', 'prepare', 'plan', 'preview', 'segment', 'build-records', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
+    parser.add_argument('action', choices=['check', 'check-inference', 'fix-tf-slim', 'diagnose', 'serve', 'stage-yolo', 'adopt-coco', 'inspect', 'prepare', 'plan', 'preview', 'build-records', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
     parser.add_argument('--config', default=os.environ.get('CV_CONFIG_PATH', DEFAULT_CONFIG))
     parser.add_argument('--input', default='data/inference')
     parser.add_argument('--output', help='Folder hasil; default berbeda untuk setiap tahapan.')
-    parser.add_argument('--split', choices=['train', 'test'], help='evaluate: test; preview/segment: default train.')
+    parser.add_argument('--split', choices=['train', 'test'], help='evaluate: test; preview: default train.')
     parser.add_argument('--staging', default='data/processed/pcv-converter-v2', help='adopt-coco: folder input converter hasil stage-yolo.')
-    parser.add_argument('--limit', type=int, default=12, help='Jumlah gambar preview/segment, default 12; 0 untuk semua gambar pada split.')
+    parser.add_argument('--limit', type=int, default=12, help='Jumlah gambar preview, default 12; 0 untuk semua gambar pada split.')
     parser.add_argument('--require-gpu', action='store_true')
     parser.add_argument('--archive', default='outputs/ssd-model.zip')
     parser.add_argument('--host', default='127.0.0.1', help='serve: alamat listener PCV.')
@@ -62,10 +62,9 @@ def main():
             manifest, summary = prepare(config, root)
             print(json.dumps({'splits': summary, 'warnings': manifest['warnings']}, indent=2))
             print(f'Dataset siap: {config["prepared_dir"]}/manifest.json')
-        elif args.action in ('preview', 'segment'):
+        elif args.action == 'preview':
             from .processing import preview_dataset
-            preview_dataset(config, root, args.output or f'outputs/pcv-{args.action}',
-                            args.split or 'train', args.limit, segment=args.action == 'segment')
+            preview_dataset(config, root, args.output or 'outputs/pcv-preview', args.split or 'train', args.limit)
         elif args.action == 'plan':
             from .training import load_manifest
             from .settings import training_plan

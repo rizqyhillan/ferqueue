@@ -2,7 +2,7 @@
 
 PCV deteksi kendaraan dengan **TensorFlow 2.15.1 dan SSD MobileNet V2 FPNLite 320×320**, terhubung ke dashboard Flask untuk kamera dan unggah gambar.
 
-Mulai dari **[panduan PCV manual](docs/PCV_MANUAL.md)**. Panduan mencakup instalasi software, dataset raw berlabel, konversi YOLO → COCO memakai [repo Taeyoung96](https://github.com/Taeyoung96/Yolo-to-COCO-format-converter), pembagian sesi train/test, segmentasi GrabCut untuk review, pengolahan citra, TFRecord, training, evaluasi, dan integrasi web. Setiap tahap dijalankan sendiri dengan perintah Python langsung; tidak memerlukan script Bash/PowerShell proyek.
+Mulai dari **[panduan PCV manual](docs/PCV_MANUAL.md)** untuk persiapan dataset, pemeriksaan bounding box, training, evaluasi, dan integrasi web. Untuk training GPU di laptop Windows dan pengaturan deteksi webcam, ikuti **[panduan RTX 4060](docs/PCV_MANUAL_WINDOWS_RTX4060.md)**.
 
 ## Alur utama
 
@@ -16,7 +16,6 @@ python pcv.py stage-yolo --config apps/computer-vision/configs/yolo.json --outpu
 # Jalankan main.py repo Taeyoung96 untuk train dan test sesuai panduan bagian 5.
 python pcv.py adopt-coco --config apps/computer-vision/configs/yolo.json --staging data/processed/pcv-converter-v2 --input .cache/yolo-to-coco/output --output data/processed/pcv-coco-v2
 python pcv.py prepare --config apps/computer-vision/configs/coco.json
-python pcv.py segment --config apps/computer-vision/configs/coco.json --output outputs/pcv-segment-v1
 python pcv.py preview --config apps/computer-vision/configs/coco.json --output outputs/pcv-preview-v1
 python pcv.py plan --config apps/computer-vision/configs/coco.json
 python pcv.py build-records --config apps/computer-vision/configs/coco.json
@@ -33,7 +32,7 @@ Contoh config baru memakai **70/30 berdasarkan kelompok**, batch 4, dan anggaran
 
 Edit `apps/computer-vision/configs/coco.json` untuk epoch, batch, learning rate, augmentasi, preprocessing, serta threshold/NMS. [Tabel parameter dan pengaruhnya](docs/PCV_MANUAL.md#13-bagian-yang-bisa-diubah-dan-pengaruhnya) menjelaskan perubahan yang memerlukan training baru dan perubahan tampilan yang cukup dengan restart API. Eksperimen berbeda memakai `run_dir` berbeda.
 
-GrabCut menghasilkan **mask perkiraan untuk pemeriksaan**, bukan label segmentasi piksel untuk melatih SSD. Model mengenali kelas dan bounding box. Ukuran panjang, lebar, tinggi fisik memerlukan modul kalibrasi terpisah; bbox/mask belum menjadi ukuran meter.
+Model dilatih dengan gambar utuh dan anotasi bounding box. Ukuran panjang, lebar, dan tinggi fisik memerlukan kalibrasi kamera.
 
 Web menerima kelas, confidence, dan bounding box melalui `/api/detect`. Integrasi kamera tidak memerlukan database atau ESP32. Model anomali, load cell, gate, dan penyimpanan pemeriksaan merupakan bagian lain yang perlu diverifikasi terpisah. [Panduan web](apps/web-monitoring/README-web.md).
 
@@ -51,7 +50,7 @@ Web menerima kelas, confidence, dan bounding box melalui `/api/detect`. Integras
 | `data/raw/vehicles/` | Gambar/label asli lokal |
 | `data/processed/` | COCO dan manifest versi dataset |
 | `models/mobilenet/runs/` | Records, checkpoint, ekspor, dan laporan per eksperimen |
-| `outputs/` | Review segmentasi, preview, dan prediksi |
+| `outputs/` | Pratinjau bounding box dan prediksi |
 | `firmware/` | Firmware load cell/servo |
 
 Default `pcv.py` adalah `apps/computer-vision/configs/coco.json`. Untuk tahap sumber YOLO, pilih `--config apps/computer-vision/configs/yolo.json`. Konfigurasi, dependensi, kode, dan tes PCV berada di satu aplikasi; panduan lengkap ada di `docs/PCV_MANUAL.md`.

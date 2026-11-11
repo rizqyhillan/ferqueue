@@ -4,6 +4,8 @@ Panduan ini mengikuti alur [PCV_MANUAL.md](PCV_MANUAL.md), dari dataset YOLO ber
 
 Jalankan perintah satu per satu. Perintah berlabel **PowerShell** dijalankan di Windows. Semua blok **Bash** dijalankan di terminal Ubuntu, dari root folder `ferqueue` setelah repo tersedia, kecuali saat berpindah ke folder converter.
 
+Jika Ubuntu, environment Python, dan Object Detection API sudah siap, ulangi pemeriksaan GPU di bagian 3. Jika JSON COCO dan manifest sudah tersedia, lanjutkan ke bagian 5 untuk memakai dataset yang sama pada run baru.
+
 ## 1. Siapkan driver NVIDIA dan WSL2
 
 1. Pasang driver Windows untuk **GeForce RTX 4060 Laptop GPU** dan restart bila diminta. WSL2 memakai driver dari Windows, jadi pemasangan driver NVIDIA dilakukan di Windows saja. [Unduhan driver NVIDIA](https://www.nvidia.com/drivers/), [panduan CUDA di WSL](https://docs.nvidia.com/cuda/wsl-user-guide/).
@@ -43,7 +45,7 @@ git clone --branch remake-the-calculation-for-pcv https://github.com/rizqyhillan
 cd ferqueue
 ```
 
-Contoh clone memakai branch yang memuat `pcv.py` dan alur dari panduan asal. Jika sudah punya salinan yang sesuai, gunakan folder itu. Simpan repo dan dataset kerja di filesystem Ubuntu, misalnya `~/projects/ferqueue`, supaya akses banyak file gambar lebih cepat. Dari root repo di Ubuntu, `explorer.exe .` membuka folder tersebut di File Explorer Windows untuk menyalin dataset atau membuka hasil. [Lokasi file untuk proyek WSL](https://learn.microsoft.com/windows/dev-environment/wsl-interop#performance-considerations).
+Jika repo sudah ada di Windows, buka folder yang sama dari Ubuntu, misalnya `cd /mnt/c/Users/NAMA_WINDOWS/Downloads/ferqueue`. Jika menyalin proyek ke `~/projects/ferqueue` untuk akses gambar yang lebih cepat, salin kode terbaru, `data/raw/vehicles/`, JSON COCO, dan manifest dengan struktur yang sama. Buat environment Python di Ubuntu yang menjalankan training. Dari root repo di Ubuntu, `explorer.exe .` membuka folder itu di File Explorer Windows. [Lokasi file untuk proyek WSL](https://learn.microsoft.com/windows/dev-environment/wsl-interop#performance-considerations).
 
 Periksa `python3.11 --version`. Jika Python 3.11 sudah terpasang di Ubuntu, buat environment dengan `python3.11 -m venv .venv-pcv`. Jika belum, gunakan `uv` untuk mendapatkan Python 3.11 di Ubuntu. Pilih satu cara dan gunakan kembali environment yang sudah sesuai.
 
@@ -131,7 +133,9 @@ python pcv.py inspect --config apps/computer-vision/configs/yolo.json
 python pcv.py stage-yolo --config apps/computer-vision/configs/yolo.json --output data/processed/pcv-converter-v2
 ```
 
-Perbaiki masalah label dari `inspect` sebelum membuat staging. Buat staging di Ubuntu ini karena `train.txt` dan `test.txt` berisi path absolut. Gunakan folder staging dari hasil yang sudah valid jika masih memakai dataset yang sama.
+Perbaiki masalah label dari `inspect` sebelum membuat staging. Buat staging di Ubuntu ini karena `train.txt` dan `test.txt` berisi path absolut. Jika kamu memperbarui dataset yang sebelumnya sudah dikonversi, ganti `pcv-converter-v2` dan `pcv-coco-v2` menjadi folder versi baru, misalnya `pcv-converter-v3` dan `pcv-coco-v3`, di semua perintah bagian ini.
+
+Jika `.cache/yolo-to-coco` sudah berisi converter pada commit yang dipakai, langsung lanjut ke pengaturan daftar kelas.
 
 ```bash
 git clone https://github.com/Taeyoung96/Yolo-to-COCO-format-converter.git .cache/yolo-to-coco
@@ -157,35 +161,38 @@ python pcv.py adopt-coco --config apps/computer-vision/configs/yolo.json \
   --input .cache/yolo-to-coco/output --output data/processed/pcv-coco-v2
 ```
 
-## 5. Buat config run RTX 4060 dan TFRecord
+## 5. Buat config run baru dan TFRecord
 
-Salin config COCO untuk eksperimen ini. Simpan nama config yang sama untuk semua tahap berikutnya.
-
-```bash
-cp -i apps/computer-vision/configs/coco.json apps/computer-vision/configs/coco-rtx4060.json
-nano apps/computer-vision/configs/coco-rtx4060.json
-```
-
-Di salinan tersebut, ubah `run_dir` menjadi `models/mobilenet/runs/pcv-coco-rtx4060-001`. Untuk baseline, pakai `batch_size` 4 dan `epochs` 30 dari config bawaan. Pertahankan `dataset_dir`, `coco_annotations`, dan `prepared_dir` jika mengikuti struktur sebelumnya. Jika data, label, atau split berubah, gunakan versi baru untuk hasil konversi, manifest, dan run, lalu sesuaikan path di config.
+Salin config RTX 4060 sekali untuk eksperimen baru. Pakai config salinan untuk semua tahap mulai dari sini.
 
 ```bash
-python pcv.py inspect --config apps/computer-vision/configs/coco-rtx4060.json
-python pcv.py prepare --config apps/computer-vision/configs/coco-rtx4060.json
+PCV_CONFIG=apps/computer-vision/configs/coco-rtx4060-retrain.json
+cp -i apps/computer-vision/configs/coco-rtx4060.json "$PCV_CONFIG"
+nano "$PCV_CONFIG"
 ```
 
-Periksa `data/processed/pcv-coco-manifest-v2/summary.json` dan distribusi kelas sebelum melatih. Jika manifest yang sesuai sudah tersedia, langsung gunakan kembali. Sebelum membuat TFRecord, kamu bisa memeriksa gambar, kotak label, dan hasil preprocessing pada sampel train. Mask GrabCut dipakai untuk review. Training memakai gambar utuh dan kotak label.
+Di salinan tersebut, ubah `run_dir` menjadi `models/mobilenet/runs/pcv-coco-rtx4060-002` atau folder kosong lain. Untuk pembanding, gunakan `batch_size` 4, `epochs` 30, `learning_rate` 0.004, dan preprocessing bawaan (`denoise_kernel` 0, `clahe_clip_limit` 0, `gamma` 1.0). Training memakai gambar utuh dan anotasi bounding box. Run baru mulai dari bobot pretrained COCO. Folder `pcv-coco-rtx4060-001` tetap bisa dipakai untuk membandingkan model sebelumnya.
+
+Jika dataset sama, pakai ulang `dataset_dir`, `coco_annotations`, dan `prepared_dir`. Jika data, label, atau split berubah, ulangi bagian 4 dengan folder hasil konversi baru, arahkan config ke JSON COCO tersebut, dan gunakan `prepared_dir` baru. Jalankan `prepare` hanya jika manifest untuk versi data ini belum dibuat.
 
 ```bash
-python pcv.py segment --config apps/computer-vision/configs/coco-rtx4060.json --split train --limit 12 --output outputs/rtx4060-segment
-python pcv.py preview --config apps/computer-vision/configs/coco-rtx4060.json --split train --limit 12 --output outputs/rtx4060-preview
+python pcv.py inspect --config "$PCV_CONFIG"
+# Jalankan hanya jika manifest untuk dataset ini belum ada.
+python pcv.py prepare --config "$PCV_CONFIG"
+```
+
+Periksa `summary.json` di `prepared_dir` untuk memastikan jumlah gambar dan kelas di tiap split. Jalankan `preview` pada sampel train, lalu buka `*.boxes.jpg` dan periksa apakah kotak dan ID kelas sesuai. Pilih folder output baru jika sudah ada hasil pratinjau di sana.
+
+```bash
+python pcv.py preview --config "$PCV_CONFIG" --split train --limit 12 --output outputs/rtx4060-preview-002
 ```
 
 ```bash
-python pcv.py plan --config apps/computer-vision/configs/coco-rtx4060.json
-python pcv.py build-records --config apps/computer-vision/configs/coco-rtx4060.json
+python pcv.py plan --config "$PCV_CONFIG"
+python pcv.py build-records --config "$PCV_CONFIG"
 ```
 
-Periksa `training-plan.json`, `label_map.pbtxt`, serta `records/train.tfrecord` dan `records/test.tfrecord` di `models/mobilenet/runs/pcv-coco-rtx4060-001/`. `plan` menampilkan jumlah langkah yang dihitung dari epoch, ukuran batch, dan jumlah gambar train.
+Periksa `training-plan.json`, `label_map.pbtxt`, serta `records/train.tfrecord` dan `records/test.tfrecord` di `run_dir`. `plan` menampilkan jumlah langkah yang dihitung dari epoch, ukuran batch, dan jumlah gambar train.
 
 ## 6. Training dengan RTX 4060
 
@@ -194,14 +201,14 @@ Siapkan bobot awal COCO. Untuk unduhan manual, ekstrak arsip resmi ke `models/mo
 Di terminal Ubuntu dengan `.venv-pcv` aktif dan pengaturan CUDA dari bagian 3, jalankan:
 
 ```bash
-python pcv.py train --config apps/computer-vision/configs/coco-rtx4060.json --require-gpu
+python pcv.py train --config "$PCV_CONFIG" --require-gpu
 ```
 
-Pertahankan `--require-gpu`. Flag ini menghentikan perintah jika GPU gagal dipakai. `train` tanpa flag tersebut memilih CPU. Saat training mulai, cari `GPU:0` di log `MirroredStrategy`. Dari terminal Ubuntu lain, jalankan `watch -n 2 nvidia-smi` untuk melihat penggunaan GPU dan VRAM jika tersedia. Untuk melihat loss, jalankan TensorBoard dari root repo di terminal Ubuntu lain.
+Pertahankan `--require-gpu`. Flag ini menghentikan perintah jika GPU gagal dipakai. Saat training mulai, cari `GPU:0` di log `MirroredStrategy`. Dari terminal Ubuntu lain, jalankan `watch -n 2 nvidia-smi` untuk melihat penggunaan GPU dan VRAM jika tersedia. Untuk melihat loss, jalankan TensorBoard dari root repo di terminal Ubuntu lain. Sesuaikan `--logdir` jika kamu memakai `run_dir` lain.
 
 ```bash
 source .venv-pcv/bin/activate
-python -m tensorboard.main --logdir models/mobilenet/runs/pcv-coco-rtx4060-001/training --port 6006
+python -m tensorboard.main --logdir models/mobilenet/runs/pcv-coco-rtx4060-002/training --port 6006
 ```
 
 Buka [TensorBoard](http://localhost:6006) di browser Windows. Jika perlu berhenti, tekan `Ctrl+C` pada terminal training. Ulangi perintah training dengan config dan dataset yang sama untuk melanjutkan dari checkpoint terakhir yang tersimpan. Jika VRAM habis, coba `batch_size` 2 pada config eksperimen dengan `run_dir` baru, lalu ulangi `plan`, `build-records`, dan `train` memakai config baru itu.
@@ -209,20 +216,20 @@ Buka [TensorBoard](http://localhost:6006) di browser Windows. Jika perlu berhent
 ## 7. Export, evaluasi, dan prediksi
 
 ```bash
-python pcv.py export --config apps/computer-vision/configs/coco-rtx4060.json --require-gpu
-python pcv.py evaluate --config apps/computer-vision/configs/coco-rtx4060.json --split test --require-gpu
+python pcv.py export --config "$PCV_CONFIG" --require-gpu
+python pcv.py evaluate --config "$PCV_CONFIG" --split test --require-gpu
 ```
 
 `export` memakai checkpoint terakhir. Periksa `export.json` untuk lokasi SavedModel dan `reports/ckpt-*-test.json` untuk mAP, AP50, serta metrik per kelas. Setelah training dilanjutkan, export lagi sebelum menilai model baru.
 
-Masukkan JPG/PNG baru ke `data/inference/`, lalu jalankan:
+Simpan contoh gambar baru dari posisi webcam, misalnya `data/inference/webcam.jpg`, lalu jalankan prediksi untuk membandingkan kotak dengan kendaraan pada gambar.
 
 ```bash
-python pcv.py predict --config apps/computer-vision/configs/coco-rtx4060.json \
-  --input data/inference --output outputs/rtx4060-predictions --require-gpu
+python pcv.py predict --config "$PCV_CONFIG" \
+  --input data/inference/webcam.jpg --output outputs/rtx4060-predictions-002 --require-gpu
 ```
 
-Buka gambar hasil dan JSON di `outputs/rtx4060-predictions/`. Untuk memindahkan model ke perangkat lain, gunakan `package-model` dan `import-model` sesuai [panduan pemindahan model](PCV_MANUAL.md#15-perangkat-lain-windows-dan-nvidia-opsional), dengan `coco-rtx4060.json` sebagai config saat membuat paket.
+Buka gambar hasil dan JSON di `outputs/rtx4060-predictions-002/`. Untuk memindahkan model ke perangkat lain, gunakan `package-model` dan `import-model` sesuai [panduan pemindahan model](PCV_MANUAL.md#15-perangkat-lain-windows-dan-nvidia-opsional), dengan config run yang sudah diekspor.
 
 ## 8. Uji unggah dan kamera dari browser Windows
 
@@ -231,10 +238,10 @@ Jalankan API PCV dan Flask di Ubuntu yang sama. Browser Windows mengakses Flask 
 **Terminal Ubuntu 1.** Dari root repo, aktifkan `.venv-pcv` dan jalankan blok pengaturan CUDA dari bagian 3 bila terminalnya baru.
 
 ```bash
-python pcv.py serve --config apps/computer-vision/configs/coco-rtx4060.json --require-gpu
+python pcv.py serve --config apps/computer-vision/configs/coco-rtx4060-retrain.json --require-gpu
 ```
 
-Tunggu API siap, lalu periksa [health PCV](http://localhost:8000/health) dari Windows. Harus muncul `status: ready` beserta kelas dan checkpoint.
+Tunggu API siap, lalu periksa `status: ready`, kelas, checkpoint, path model, dan threshold yang aktif. Untuk mencoba ekspor lama yang ada di run `pcv-coco-rtx4060-001`, jalankan `serve` dengan config `coco-rtx4060.json`. [Status API PCV](http://localhost:8000/health).
 
 **Terminal Ubuntu 2.** Dari root repo, buat `.venv-web` jika belum ada, lalu jalankan Flask. Arahkan Flask ke API PCV pada port 8000 di Ubuntu yang sama.
 
@@ -244,7 +251,23 @@ Tunggu API siap, lalu periksa [health PCV](http://localhost:8000/health) dari Wi
 WEB_HOST=127.0.0.1 CV_API_URL=http://127.0.0.1:8000 .venv-web/bin/python apps/web-monitoring/app.py
 ```
 
-Buka [health melalui Flask](http://localhost:5000/api/cv/health), lalu [dashboard FERQUEUE](http://localhost:5000) di browser Windows. Uji **Unggah** dengan gambar baru, lalu klik **Aktifkan kamera** dan izinkan akses kamera. Alur kamera PCV ini cukup dengan kedua server tersebut.
+Buka dashboard FERQUEUE di browser Windows. Uji **Unggah** dengan gambar yang sama dari bagian 7, lalu klik **Aktifkan kamera** dan izinkan akses kamera. Alur kamera berjalan dengan dua server tersebut. [Status API melalui Flask](http://localhost:5000/api/cv/health) · [Dashboard FERQUEUE](http://localhost:5000).
+
+### Ubah pengaturan bounding box
+
+Edit file config JSON yang digunakan oleh `serve`, misalnya `apps/computer-vision/configs/coco-rtx4060-retrain.json`. Simpan file, hentikan PCV dengan `Ctrl+C`, lalu jalankan lagi `serve` dengan config tersebut. Perubahan berikut berlaku tanpa training ulang.
+
+| Pengaturan | Kapan diubah |
+| --- | --- |
+| `run_dir` | Arahkan ke folder eksperimen yang punya `export.json` dan SavedModel. Periksa path model di `/health`. |
+| `confidence_threshold` | Mulai dari `0.29` pada config RTX 4060. Jika kendaraan jelas sering terlewat, coba `0.25` dan bandingkan frame yang sama. Jika banyak kotak muncul di background, naikkan bertahap. |
+| `nms_iou_threshold` | Mulai dari `0.45`. Turunkan jika satu kendaraan sering mendapat beberapa kotak, atau naikkan sedikit jika dua kendaraan berdekatan sering menjadi satu deteksi. |
+| `class_agnostic_nms` | Dengan `true`, kotak bertumpuk dapat saling menghapus meski kelasnya berbeda. Coba `false` jika dua kendaraan berbeda kelas yang bertumpuk sering kehilangan satu kotak. Periksa duplikat beda kelas setelah mengubahnya. |
+| `max_detections` | Naikkan dari `10` jika satu frame dapat berisi lebih dari sepuluh kendaraan. |
+
+Jika kotak muncul dengan kelas salah, longgar, atau sering hilang saat kendaraan jauh, ambil sampel dari posisi webcam yang sebenarnya. Labeli tiap kendaraan target, termasuk yang kecil, tertutup sebagian, atau berdekatan. Sertakan beberapa frame background kosong dan kelompokkan berdasarkan sesi rekaman agar train dan test memakai sesi berbeda. Setelah memperbarui data, ulangi konversi, manifest, training, dan export pada run baru. Kelas yang tersedia mengikuti label training. Penambahan kelas memerlukan anotasi dan training ulang.
+
+Browser menggambar kotak di `drawDetections()` pada `apps/web-monitoring/static/live_detection.js`. Ubah `context.strokeStyle` atau `context.lineWidth` jika ingin mengganti warna atau tebal garis. Pemilihan perangkat kamera ada pada `getUserMedia()` di `apps/web-monitoring/static/app.js`. Jika browser membuka kamera yang salah, periksa perangkat yang dipilih di pengaturan izin kamera browser.
 
 ## 9. Jika tersendat
 

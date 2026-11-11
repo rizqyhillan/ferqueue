@@ -16,7 +16,7 @@ flowchart TD
     D --> E[main.py dari repo Taeyoung96 untuk test]
     E --> F[adopt-coco: hubungkan JSON ke raw]
     F --> G[Manifest train / test]
-    G --> H[Segmentasi GrabCut dan preview citra]
+    G --> H[Pratinjau bounding box dan citra]
     H --> I[TFRecord dan rencana epoch]
     I --> J[Training TensorFlow SSD]
     J --> K[Export SavedModel dan evaluasi test]
@@ -24,12 +24,7 @@ flowchart TD
     L --> M[API PCV :8000 → Flask :5000]
 ```
 
-Dua konsep yang perlu dipisahkan:
-
-- **Deteksi objek** memprediksi kelas dan kotak kendaraan. Model SSD di proyek ini melakukan tugas tersebut.
-- **Segmentasi GrabCut** memperkirakan piksel foreground dari kotak berlabel. Mask disimpan untuk diperiksa, bukan dimasukkan sebagai ground truth segmentasi. Format YOLO LabelImg lima kolom tidak memiliki label per piksel. Konversi COCO menyimpan `segmentation: []`, bukan membuat polygon palsu dari kotak. Jika ingin melatih instance/semantic segmentation, diperlukan anotasi mask/polygon terverifikasi dan model segmentasi tersendiri. [Penjelasan GrabCut dari OpenCV](https://docs.opencv.org/4.x/d8/d83/tutorial_py_grabcut.html).
-
-Mask pada tahap review tidak menghapus background data training. Baseline melatih gambar utuh. Denoise/CLAHE/gamma yang kamu aktifkan akan benar-benar diterapkan pada TFRecord, evaluasi, prediksi gambar, dan API web. Transformasi ini tidak mengubah posisi kotak. Crop, rotasi, dan resize manual setelah labeling memerlukan pembaruan koordinat, sehingga tidak disediakan sebagai toggle preprocessing.
+SSD memprediksi kelas dan bounding box kendaraan dari gambar utuh. Denoise, CLAHE, dan gamma yang kamu aktifkan diterapkan pada TFRecord, evaluasi, prediksi gambar, dan API web dengan posisi kotak yang sama. Jika melakukan crop atau rotasi setelah labeling, sesuaikan koordinat kotak sebelum membuat manifest.
 
 | Tahap | Input | Output utama | Periksa sebelum lanjut |
 | --- | --- | --- | --- |
@@ -39,7 +34,6 @@ Mask pada tahap review tidak menghapus background data training. Baseline melati
 | Konversi eksternal | Daftar train/test | `.cache/yolo-to-coco/output/instances_*.json` | Hasil `main.py` repo Taeyoung96 |
 | Adopt | JSON eksternal + staging | `data/processed/pcv-coco-v2/` | Path gambar raw, kelompok, kategori, bbox |
 | Prepare | Gambar raw + COCO | `data/processed/pcv-coco-manifest-v2/` | `summary.json` dan peringatan kelas |
-| Segment | Kotak pada manifest | `outputs/pcv-segment-v1/` | Overlay, mask, status gagal/kosong |
 | Preview | Manifest + parameter citra | `outputs/pcv-preview-v1/` | Perbandingan asli/hasil dan kotak |
 | Records | Manifest + preprocessing | `run_dir/records/`, `label_map.pbtxt` | Dua TFRecord dan `training-plan.json` |
 | Training | Records + pretrained COCO | `run_dir/training/` | Loss, checkpoint, TensorBoard |
@@ -112,7 +106,7 @@ python -m pip install -r apps/computer-vision/requirements/data.txt
 python -c "import PIL, cv2, numpy; print(PIL.__version__, cv2.__version__, numpy.__version__)"
 ```
 
-Yang diharapkan: Python **3.11.x**, executable di `.venv-pcv`, Pillow **10.4.0**, OpenCV **4.10.0**, NumPy **1.26.4**. Tahap ini sudah cukup untuk inspect, konversi, prepare, preview, dan segmentasi. Jika baru ingin mengerjakan data, bagian instalasi TensorFlow berikut boleh ditunda hingga sebelum bagian 9.
+Periksa Python **3.11.x**, executable di `.venv-pcv`, Pillow **10.4.0**, OpenCV **4.10.0**, dan NumPy **1.26.4**. Paket ini cukup untuk inspect, konversi, prepare, dan preview. TensorFlow diperlukan mulai bagian 9.
 
 `source` hanya mengaktifkan virtual environment Python, bukan menjalankan pipeline PCV. Setiap membuka terminal baru untuk PCV, masuk root repo dan aktifkan environment lagi. Alternatifnya panggil `.venv-pcv/bin/python` secara lengkap.
 
@@ -326,27 +320,15 @@ Buka `data/processed/pcv-coco-manifest-v2/summary.json`. `manifest.json` menyimp
 
 Folder manifest tidak ditimpa. Jangan menjalankan `prepare` lagi hanya karena membuka terminal baru. Dataset yang sama dapat dipakai beberapa eksperimen dengan `prepared_dir` yang sama dan `run_dir` berbeda.
 
-## 7. Segmentasi kendaraan untuk review
+## 7. Periksa bounding box label
 
-Jalankan pada beberapa contoh **train** dahulu:
+Periksa beberapa sampel dari split **train** sebelum membuat TFRecord.
 
 ```text
-python pcv.py segment --config apps/computer-vision/configs/coco.json --split train --limit 12 --output outputs/pcv-segment-v1
+python pcv.py preview --config apps/computer-vision/configs/coco.json --split train --limit 12 --output outputs/pcv-preview-v1
 ```
 
-Buka file pada subfolder output melalui file manager:
-
-- `*.object-1.mask.png`: mask hitam/putih perkiraan foreground.
-- `*.object-1.cutout.png`: objek dengan background transparan.
-- `*.object-1.overlay.jpg`: warna penanda piksel foreground di atas gambar.
-- `*.boxes.jpg`: kotak label dan ID kelas.
-- `report.json`: status tiap objek dan lokasi mask.
-
-Nomor objek bertambah untuk gambar dengan banyak kotak. Status `approximate_review_required` tetap berarti perlu pemeriksaan manusia. `empty_mask_review_required`, `box_too_small`, atau `grabcut_failed` berarti mask tidak layak/tidak tersedia; kode tidak menggantinya dengan kotak yang diwarnai seolah mask benar.
-
-Ubah `segmentation.iterations` atau `segmentation.morphology_kernel` di config COCO, lalu jalankan ulang dengan folder output baru untuk membandingkan. `--limit 0` memproses semua gambar pada split yang dipilih; awali dengan sampel karena GrabCut per objek bisa lambat.
-
-Parameter segmentasi hanya memengaruhi hasil review mask. Ia tidak menaikkan akurasi SSD secara langsung dan mask tidak dipakai sebagai input training. Pertahankan background pada training awal agar model mempelajari kondisi kamera nyata.
+Buka `*.boxes.jpg` di subfolder output. Pastikan kotak menempel pada kendaraan yang dilabeli dan ID sesuai urutan kelas di manifest. `report.json` mencatat gambar yang diperiksa. Gunakan `--limit 0` untuk seluruh split atau `--split test` untuk memeriksa label test. Jika ada label yang salah, koreksi sumbernya dan buat versi baru konversi serta manifest.
 
 ## 8. Pengolahan citra dan preview
 
@@ -364,10 +346,10 @@ Baseline pada `apps/computer-vision/configs/coco.json` mematikan denoise/CLAHE d
 Urutan operasi: RGB → Gaussian denoise bila aktif → CLAHE pada kanal luminansi LAB bila aktif → gamma. Konvensi gamma di kode adalah `output = 255 × (input / 255)^gamma`; gamma < 1 mencerahkan dan > 1 menggelapkan. Ukuran gambar dan kotak tetap.
 
 ```text
-python pcv.py preview --config apps/computer-vision/configs/coco.json --split train --limit 12 --output outputs/pcv-preview-v1
+python pcv.py preview --config apps/computer-vision/configs/coco.json --split train --limit 12 --output outputs/pcv-preview-v2
 ```
 
-Buka `*.comparison.jpg`: sisi kiri gambar asli, kanan hasil preprocessing. Periksa juga `*.processed.png` dan `*.boxes.jpg`. Blur terlalu kuat bisa menghilangkan detail kendaraan kecil; CLAHE dapat memperkuat noise; gamma yang berlebihan bisa merusak warna/detail. Bandingkan satu perubahan setiap eksperimen. Jika ingin GrabCut pada pengaturan citra baru, jalankan lagi bagian 7 dengan output baru.
+Buka `*.comparison.jpg` untuk membandingkan gambar asli di kiri dengan hasil preprocessing di kanan. Periksa juga `*.processed.png` dan `*.boxes.jpg`. Blur terlalu kuat bisa menghilangkan detail kendaraan kecil. CLAHE dapat memperkuat noise dan gamma yang berlebihan bisa mengubah warna atau mengurangi detail. Bandingkan satu perubahan setiap eksperimen.
 
 Preprocessing akan dibekukan ketika `build-records` dijalankan. Saat export, setelannya ikut masuk metadata model. Prediksi/evaluasi/web memakai metadata tersebut, termasuk setelah model dibagikan, bukan mengubah input secara diam-diam mengikuti config lain. Mengganti preprocessing setelah training memerlukan eksperimen dan training baru.
 
@@ -476,7 +458,7 @@ Uji gambar baru yang belum masuk dataset. Salin JPG/PNG ke `data/inference/`:
 python pcv.py predict --config apps/computer-vision/configs/coco.json --input data/inference --output outputs/pcv-predictions-v2
 ```
 
-Buka gambar bounding box dan JSON prediksi. Koordinat offline adalah `[xmin, ymin, xmax, ymax]` dalam piksel gambar asli. Dimensi fisik tetap `null` dengan status `not_calibrated`; kotak/mask 2D belum menghasilkan panjang, lebar, tinggi dalam meter.
+Buka gambar bounding box dan JSON prediksi. Koordinat offline adalah `[xmin, ymin, xmax, ymax]` dalam piksel gambar asli. Dimensi fisik bernilai `null` dengan status `not_calibrated` hingga tersedia kalibrasi kamera.
 
 ## 12. Integrasi model ke web
 
@@ -557,8 +539,6 @@ Ubah file `apps/computer-vision/configs/coco.json` untuk eksperimen training/pre
 | `preprocessing.clahe_clip_limit` | 0 | 0 mati; >0 kontras lokal pada luminansi | Preview dan run baru |
 | `preprocessing.clahe_grid_size` | 8 | Jumlah tile per sisi untuk CLAHE | Preview dan run baru bila CLAHE aktif |
 | `preprocessing.gamma` | 1.0 | 1 netral; <1 cerah; >1 gelap | Preview dan run baru |
-| `segmentation.iterations` | 5 | Banyak iterasi GrabCut; lebih besar lebih lama | Segment dengan output baru; bobot SSD tidak berubah |
-| `segmentation.morphology_kernel` | 3 | 0 mati; 3/5/7 operasi open/close mask | Segment ulang; memengaruhi detail mask saja |
 | `checkpoint_every_n` | 100 | Jarak penyimpanan checkpoint; lebih kecil menambah I/O | Tetapkan sebelum run baru; tidak menambah epoch |
 | `confidence_threshold` | .5 | Ambang tampilan; turun → lebih banyak deteksi termasuk false positive, naik → lebih sedikit | Prediksi ulang atau restart API; tanpa retraining |
 | `nms_iou_threshold` | .45 | NMS tambahan; lebih rendah menekan lebih banyak kotak bertumpuk | Prediksi ulang/restart API |
@@ -616,7 +596,7 @@ Set-Location $pcvRepo
 .\.venv-pcv\Scripts\python.exe pcv.py prepare --config apps/computer-vision/configs/coco.json
 ```
 
-Untuk preview/segment, ganti prefix `python` pada perintah bagian 7–8 menjadi `.\.venv-pcv\Scripts\python.exe`. Tidak perlu mengubah ExecutionPolicy atau menjalankan `.ps1`. Salin gambar raw, JSON COCO, dan manifest ke komputer training dengan struktur relatif sama; jangan menyalin virtual environment lintas OS.
+Untuk preview, ganti prefix `python` pada perintah bagian 7–8 menjadi `.\.venv-pcv\Scripts\python.exe`. Salin gambar raw, JSON COCO, dan manifest ke komputer training dengan struktur relatif sama. Buat virtual environment di sistem operasi tempat Python akan berjalan.
 
 Setelah model dilatih di Linux, buat paket di perangkat training:
 
@@ -676,13 +656,12 @@ Jangan mulai training GPU sampai `check --require-gpu` menyatakan GPU aktif. Tan
 | `sudah berisi` / `tidak ditimpa` | Buka hasil yang sudah ada; jika membuat versi baru, ganti lokasi output/manifest/run secara konsisten |
 | `berbeda dari manifest` | Data/path/seed/rasio berubah; buat versi manifest/run baru |
 | `Config/dataset berbeda dari run` | Parameter training berubah; gunakan run baru, bukan resume |
-| Mask kosong/jelek | Periksa label, kontras, ukuran objek, iterasi/morfologi; jangan menganggapnya ground truth |
 | RAM/VRAM tidak cukup | Hentikan proses; coba batch lebih kecil pada run baru |
 | Training selesai tetapi prediksi masih lama | Pastikan `export` ulang dan API direstart dengan config/run yang benar |
 | PCV belum terhubung | Terminal API masih hidup, port 8000 benar, `/health` siap, `CV_API_URL` web sesuai |
 | Health siap tetapi nol deteksi | Uji gambar baru yang jelas, bandingkan kelas/data kamera, lihat threshold dan hasil test |
 | Kamera tidak boleh aktif | Izin browser, localhost/HTTPS, kamera tidak sedang dipakai aplikasi lain |
-| Dimensi tidak muncul | Modul kalibrasi dimensi fisik belum dibuat; bbox/mask bukan ukuran meter |
+| Dimensi tidak muncul | Pengukuran dimensi fisik memerlukan kalibrasi kamera |
 
 Jika sudah mentok, simpan **tahap yang dijalankan, perintah lengkap, config yang dipakai, versi Python, dan traceback terakhir**. Jangan menghapus dataset/model hanya untuk menghilangkan pesan error. Kirim informasi tersebut agar perbaikannya bisa diarahkan pada tahap yang tepat.
 
@@ -698,7 +677,7 @@ Jika sudah mentok, simpan **tahap yang dijalankan, perintah lengkap, config yang
 | `dataset.py` | Validasi YOLO, kelompok, manifest/hash |
 | `conversion.py` | Inspect, staging train/test, dan adaptasi path JSON converter eksternal |
 | `coco_dataset.py` | Validasi/import COCO dan pemetaan kategori |
-| `processing.py` | Denoise, CLAHE, gamma, GrabCut, preview |
+| `processing.py` | Denoise, CLAHE, gamma, dan pratinjau bounding box |
 | `training.py` | TFRecord, pipeline SSD, train/export/evaluasi/prediksi |
 | `postprocessing.py` | Threshold dan NMS yang sama untuk offline/web |
 | `sharing.py` | Ekspor/impor paket inference beserta preprocessing |

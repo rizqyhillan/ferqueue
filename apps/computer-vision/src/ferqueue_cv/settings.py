@@ -36,18 +36,12 @@ def validate_processing(config):
     if grid > 64:
         raise ValueError('clahe_grid_size maksimal 64.')
     number(processing.get('gamma', 1), 'gamma', .1, 5)
-    segmentation = config.get('segmentation', {})
-    if not isinstance(segmentation, dict) or set(segmentation) - {'iterations', 'morphology_kernel'}:
-        raise ValueError('segmentation hanya menerima iterations dan morphology_kernel.')
-    if positive_int(segmentation, 'iterations', 5) > 50:
-        raise ValueError('iterations GrabCut maksimal 50.')
-    if type(segmentation.get('morphology_kernel', 3)) is not int or segmentation.get('morphology_kernel', 3) not in (0, 3, 5, 7):
-        raise ValueError('morphology_kernel harus 0, 3, 5, atau 7.')
 
 
 def load_config(path, root):
     root = Path(root).resolve()
     config = json.loads((root / path).read_text(encoding='utf-8-sig'))
+    config.pop('segmentation', None)  # Ignore the retired option in older configs.
     for key in ('dataset_dir', 'prepared_dir', 'run_dir'):
         value = Path(config[key])
         if value.is_absolute() or not (root / value).resolve().is_relative_to(root):
@@ -106,5 +100,5 @@ def training_plan(config, manifest):
 
 
 def training_identity(config):
-    """Display filtering and review-only masks do not affect training inputs."""
+    """Compare training inputs, including metadata from older runs."""
     return {key: value for key, value in config.items() if key not in DISPLAY_KEYS | {'segmentation'}}
