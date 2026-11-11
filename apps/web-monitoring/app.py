@@ -38,8 +38,8 @@ app.register_blueprint(cv_api)
 # ------------------------------------------------------------------
 scaler = None
 models = None
-thresholds = {"kmeans": 1.56, "iforest": 0.56}
-MODEL_FILE_NAME = "model_anomali_diecast.joblib"
+thresholds = {"kmeans": 1.606}
+MODEL_FILE_NAME = "model_anomali_k-means.joblib"
 
 try:
     model_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), MODEL_FILE_NAME)
@@ -65,7 +65,7 @@ antrean_perintah = []
 daftar_tiket = []
 
 state_kendaraan = {
-    "jenis": "truk",
+    "jenis": "mobil",
     "P": 0.0,
     "L": 0.0,
     "T": 0.0,
@@ -75,6 +75,9 @@ state_kendaraan = {
     "golongan": "-",
     "status_anomali": "Normal",
     "skor_anomali": 0.0,
+    "ambang_anomali": 1.13,
+    "anomali_ml": False,
+    "alasan": [],
     "waktu": None,
 }
 
@@ -101,8 +104,9 @@ def serve_static_files(filename):
 # ==================================================================
 # ENDPOINT MACHINE LEARNING & INTEGRASI DASHBOARD
 # ==================================================================
+@app.route("/predict", methods=["POST"])
 @app.route("/predict/<model_type>", methods=["POST"])
-def predict(model_type):
+def predict(model_type="kmeans"):
     if not models or not scaler or cek_aturan is None:
         return (
             jsonify({"error": "Model Machine Learning belum dimuat di server"}),
@@ -151,22 +155,17 @@ def predict(model_type):
         scaled_feats = scaler.transform(log_feats)
 
         # 5. Prediksi Model ML & Thresholding
-        if model_type == "kmeans":
+        if model_type.lower() in ["kmeans", "k-means"]:
             score = float(skor("kmeans", models["kmeans"], scaled_feats)[0])
             nama_model = "K-Means Clustering (Distance Score)"
-            thr = thresholds.get("kmeans", 1.56)
-            is_anomali = score > thr
-        elif model_type == "isolation_forest":
-            score = float(skor("iforest", models["iforest"], scaled_feats)[0])
-            nama_model = "Isolation Forest (Anomaly Score)"
-            thr = thresholds.get("iforest", 0.56)
+            thr = thresholds.get("kmeans", 1.606)
             is_anomali = score > thr
         else:
             return (
                 jsonify(
                     {
-                        "error": "Nama model tidak valid",
-                        "model_tersedia": ["kmeans", "isolation_forest"],
+                        "error": f"Model '{model_type}' tidak tersedia di {MODEL_FILE_NAME}.",
+                        "model_tersedia": list(models.keys()) if isinstance(models, dict) else ["kmeans"],
                     }
                 ),
                 400,
@@ -189,6 +188,7 @@ def predict(model_type):
             golongan_val = rule_result
 
         # 6. Update State Global Kendaraan untuk Web Monitoring
+        alasan_list = rule_result.get("alasan", []) if isinstance(rule_result, dict) else []
         state_kendaraan.update(
             {
                 "jenis": jenis,
@@ -201,6 +201,9 @@ def predict(model_type):
                 "golongan": golongan_val,
                 "status_anomali": status_anomali,
                 "skor_anomali": score,
+                "ambang_anomali": thr,
+                "anomali_ml": is_anomali,
+                "alasan": alasan_list,
                 "waktu": waktu_sekarang,
             }
         )

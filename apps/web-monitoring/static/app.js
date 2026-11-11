@@ -21,7 +21,9 @@ const state = {
   width: '—',
   height: '—',
   vehicleType: 'Belum ada hasil deteksi',
-  anomalyScore: 0
+  anomalyScore: 0,
+  anomalyThreshold: null,
+  anomalyReason: ''
 };
 
 const BASE_URL = window.location.origin.startsWith('http') ? window.location.origin : 'http://127.0.0.1:5000';
@@ -137,12 +139,31 @@ function renderInspection() {
     statusDesc.replaceChildren();
     const statusPill = element('span', `status-pill ${isAnomaly ? 'status-anomaly' : 'status-normal'}`, state.vehicleStatus);
     statusDesc.append(statusPill);
+    if (state.anomalyScore > 0) {
+      const scoreBadge = element('small', 'dimension-note', ` (Skor ML: ${Number(state.anomalyScore).toFixed(2)})`);
+      scoreBadge.style.color = isAnomaly ? '#dc2626' : '#16a34a';
+      scoreBadge.style.fontWeight = '600';
+      scoreBadge.style.marginLeft = '6px';
+      statusDesc.append(scoreBadge);
+    }
+    if (isAnomaly && state.anomalyReason) {
+      const reasonEl = element('div', 'dimension-note', `⚠️ ${state.anomalyReason}`);
+      reasonEl.style.color = '#b91c1c';
+      reasonEl.style.fontSize = '11px';
+      reasonEl.style.marginTop = '4px';
+      statusDesc.append(reasonEl);
+    }
   }
 
   const dimStatus = $('#dim-status');
   if (dimStatus) {
-    dimStatus.textContent = 'Dimensi belum tersedia';
-    dimStatus.className = isAnomaly ? 'status-anomaly' : 'status-normal';
+    if (isAnomaly) {
+      dimStatus.textContent = 'Terindikasi Anomali';
+      dimStatus.className = 'status-anomaly';
+    } else {
+      dimStatus.textContent = 'Normal';
+      dimStatus.className = 'status-normal';
+    }
   }
 
   if ($('#edit-weight')) $('#edit-weight').disabled = Boolean(state.issued);
@@ -225,12 +246,23 @@ async function fetchStatusKendaraanFromBackend() {
     }
 
     // 4. Pembacaan GOLONGAN & STATUS ANOMALI
-    if (!state.confirmed && categoryInfo(data.golongan)) {
+    if (!state.confirmed && data.golongan && data.golongan !== '-') {
       state.category = data.golongan;
     }
 
     if (data.status_anomali) {
       state.vehicleStatus = data.status_anomali;
+    }
+    if (typeof data.skor_anomali === 'number') {
+      state.anomalyScore = data.skor_anomali;
+    }
+    if (typeof data.ambang_anomali === 'number') {
+      state.anomalyThreshold = data.ambang_anomali;
+    }
+    if (Array.isArray(data.alasan) && data.alasan.length > 0) {
+      state.anomalyReason = data.alasan.join(', ');
+    } else {
+      state.anomalyReason = '';
     }
 
     state.sensorLive = true;
@@ -370,6 +402,9 @@ if ($('#next-vehicle')) {
     state.manualWeightOverride = false;
     state.category = '';
     state.vehicleStatus = 'Normal';
+    state.anomalyScore = 0;
+    state.anomalyThreshold = null;
+    state.anomalyReason = '';
     state.vehicleType = 'Belum ada hasil deteksi';
     state.confirmed = false;
     if ($('#driver-input')) $('#driver-input').value = '';
