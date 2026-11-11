@@ -11,7 +11,7 @@ __pycache__/
 .venv-web/
 .cache/
 venv/
-.pytest_cache/
+.pytest_cache/s
 .mypy_cache/
 
 # Environment and secrets
@@ -62,3 +62,4 @@ outputs/*
 !outputs/.gitkeep
 models/mobilenet/*
 !models/mobilenet/.gitkeep
+agents.md

@@ -28,6 +28,14 @@ Tunggu **API siap**. Terminal kedua — Flask:
 
 Buka [dashboard](http://localhost:5000). Uji **Unggah** dahulu, lalu **Aktifkan kamera** dan izinkan akses kamera. Frame diperkecil hingga sisi terpanjang 640 piksel sebelum dikirim.
 
+### Ukur panjang dan tinggi dengan koin 50 yen
+
+1. Pasang kamera menghadap lurus ke sisi kendaraan di titik berhenti. Berdirikan koin 50 yen (diameter luar 21 mm) menghadap kamera, sebidang dengan sisi kendaraan, dan di luar kotak kendaraan. Seluruh tepi koin perlu terlihat di latar yang kontras.
+2. Buka kamera atau unggah foto tampak samping. Klik **Tandai koin 50 yen**, lalu klik dua sudut berlawanan di sekeliling koin. Beri sedikit ruang di semua tepi. PCV membaca diameter koin dari frame yang sama dengan kotak kendaraan.
+3. Saat ada satu kendaraan utuh, perkiraan panjang dan tinggi terisi otomatis dalam cm di panel kamera dan draf tiket. Tandai ulang area koin saat mengganti sumber gambar atau menggeser kamera.
+
+Untuk mencoba skala sebelum model kendaraan tersedia, jalankan PCV dengan `python pcv.py serve --calibration-only` dan jalankan Flask seperti biasa. Setelah model tersedia, jalankan ulang PCV memakai config model. Bandingkan hasil di kamera tetap dengan penggaris sebelum memakai perkiraan ukuran untuk pemeriksaan.
+
 ## Windows
 
 Dari root repo:
@@ -56,7 +64,7 @@ Jika model diterima dari komputer lain, berikan config penerima yang sudah dipak
 - Kamera memerlukan localhost pada komputer kamera atau HTTPS. Alamat IP LAN melalui HTTP biasanya tidak mendapat izin kamera.
 - Deteksi kosong bisa terjadi karena gambar tidak berisi objek target atau model/threshold belum sesuai; periksa hasil test dan gambar yang jelas.
 
-Dimensi panjang/lebar/tinggi fisik belum dihitung. Integrasi ESP32/load cell/gate belum diverifikasi pada tahap ini. Model anomali dan MySQL bersifat terpisah dari jalur kamera.
+Untuk mengoreksi panjang dan tinggi, pilih **Ubah** pada baris dimensi di panel kamera. Koreksi dalam cm dipakai sampai pemeriksaan kendaraan berikutnya. Integrasi ESP32/load cell/gate belum diverifikasi pada tahap ini. Model anomali dan MySQL bersifat terpisah dari jalur kamera.
 
 Node tidak wajib. `npm run dev`/`npm start` tetap dapat menjalankan Flask menggunakan `.venv-web` atau `WEB_PYTHON`.
 

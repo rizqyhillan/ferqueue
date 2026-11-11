@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--archive', default='outputs/ssd-model.zip')
     parser.add_argument('--host', default='127.0.0.1', help='serve: alamat listener PCV.')
     parser.add_argument('--port', type=int, default=8000, help='serve: port API PCV.')
+    parser.add_argument('--calibration-only', action='store_true', help='serve: kalibrasi koin tanpa memuat model deteksi.')
     parser.add_argument('--dry-run', action='store_true', help='clean-dataset: buat laporan saja, tanpa pertanyaan atau perubahan dataset.')
     args = parser.parse_args()
     root = Path.cwd().resolve()
@@ -45,7 +46,7 @@ def main():
             diagnose(config, root, args.output or 'outputs/model-diagnosis.json')
         elif args.action == 'serve':
             from .live_api import serve
-            serve(config, root, args.host, args.port)
+            serve(config, root, args.host, args.port, calibration_only=args.calibration_only)
         elif args.action == 'clean-dataset':
             from .cleanup import clean_dataset
             clean_dataset(config, root, dry_run=args.dry_run)

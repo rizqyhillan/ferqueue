@@ -18,7 +18,7 @@ class TrainingRuntimeTests(unittest.TestCase):
                 patch('ferqueue_cv.live_api.serve') as serve:
             self.assertEqual(main(), 0)
             self.assertEqual(load.call_args.args[0], DEFAULT_CONFIG)
-            serve.assert_called_once_with(config, load.call_args.args[1], '127.0.0.1', 8001)
+        serve.assert_called_once_with(config, load.call_args.args[1], '127.0.0.1', 8001, calibration_only=False)
 
     def test_explicit_config_overrides_environment_for_support_tools(self):
         for action, target in [('fix-tf-slim', 'ferqueue_cv.compat.fix_decoder'),

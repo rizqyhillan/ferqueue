@@ -13,9 +13,17 @@ test('ticket numbers follow Jakarta calendar boundaries and continue after resto
   assert.equal(third.driver, 'Budi Santoso');
   assert.equal(third.plate, 'Budi Santoso');
   assert.equal(third.length, '7,20');
-  assert.equal(third.width, '2,50');
+  assert.equal(Object.hasOwn(third, 'width'), false);
   assert.equal(third.height, '3,10');
   assert.equal(third.vehicleStatus, 'Normal');
+});
+test('tickets preserve measured length and height and can read older history with width', () => {
+  const ticket = createTicket({ ...inspection, length: '10,75', width: '4,20', height: '3,86' });
+  assert.equal(ticket.length, '10,75');
+  assert.equal(ticket.height, '3,86');
+  assert.equal(Object.hasOwn(ticket, 'width'), false);
+  const legacy = { ...ticket, width: '4,20' };
+  assert.deepEqual(parseHistory(JSON.stringify([legacy])), [legacy]);
 });
 test('tickets cannot be issued with missing readings, invalid drivers, or unknown categories', () => {
   for (const change of [{ weight: null }, { weight: -20 }, { weight: 0 }, { weight: 200001 }, { driver: '' }, { driver: '<script>' }, { category: '' }, { category: 'fake' }]) {

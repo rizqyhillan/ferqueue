@@ -65,7 +65,6 @@ export function createTicket(inspection, history = [], now = new Date()) {
     weight: inspection.weight,
     category: inspection.category,
     length: inspection.length ?? '7,20',
-    width: inspection.width ?? '2,50',
     height: inspection.height ?? '3,10',
     vehicleStatus: inspection.vehicleStatus === 'Anomali' ? 'Anomali' : 'Normal',
     createdAt: now.toISOString(),

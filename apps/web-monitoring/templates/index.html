@@ -10,7 +10,7 @@
   <title>Pos Pemeriksaan · FERQUEUE</title>
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <script type="module" src="{{ url_for('static', filename='app.js') }}?v=20261104"></script>
+  <script type="module" src="{{ url_for('static', filename='app.js') }}?v=20261111"></script>
 </head>
 
 <body>
@@ -171,9 +171,11 @@
         </div>
         <div class="dimension-row">
           <div><span>PANJANG</span><strong id="dim-length">—</strong></div>
-          <div><span>LEBAR</span><strong id="dim-width">—</strong></div>
           <div><span>TINGGI</span><strong id="dim-height">—</strong></div>
-          <div><span>STATUS</span><strong id="dim-status" class="status-normal">Dimensi belum tersedia</strong></div>
+          <div><span>SUMBER</span><strong id="dim-status" class="dimension-note">Belum diisi</strong>
+            <button class="text-button" id="edit-dimensions" aria-label="Ubah dimensi">Ubah <svg class="icon">
+                <use href="#i-edit" />
+              </svg></button></div>
         </div>
         <div class="camera-actions"><button class="button button-secondary" id="activate-camera"><svg class="icon">
               <use href="#i-camera" />
@@ -185,6 +187,13 @@
               <use href="#i-camera" />
             </svg></button><input type="file" id="image-upload" accept="image/jpeg,image/png,image/webp" hidden /></div>
         <p class="camera-message" id="camera-message" role="status">Kamera perangkat dapat diaktifkan secara manual.</p>
+        <div class="coin-calibration">
+          <div class="coin-actions">
+            <button type="button" class="button button-secondary" id="select-coin" aria-pressed="false" disabled>Tandai koin 50 yen</button>
+            <button type="button" class="text-button" id="clear-coin" hidden>Hapus kalibrasi</button>
+          </div>
+          <p id="coin-status" role="status">Aktifkan kamera atau unggah foto tampak samping untuk menandai koin.</p>
+        </div>
       </section>
 
       <div class="metrics-grid">
@@ -255,6 +264,10 @@
               <dd id="ticket-class">VI B <span>· Kendaraan barang</span></dd>
             </div>
             <div>
+              <dt>Panjang × tinggi</dt>
+              <dd id="ticket-dimensions">Belum diisi</dd>
+            </div>
+            <div>
               <dt>Keterangan kendaraan</dt>
               <dd id="ticket-status-desc"><span class="status-pill status-normal">Normal</span></dd>
             </div>
@@ -319,6 +332,31 @@
     </form>
   </dialog>
 
+  <dialog id="dimensions-dialog" class="dialog" aria-labelledby="dimensions-title">
+    <form id="dimensions-form">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">DATA PEMERIKSAAN</span>
+          <h2 id="dimensions-title">Ubah dimensi kendaraan</h2>
+        </div><button type="button" class="icon-button" data-close-dialog aria-label="Tutup"><svg class="icon">
+            <use href="#i-close" />
+          </svg></button>
+      </div>
+      <p class="dialog-intro" id="dimensions-hint">Isi panjang dan tinggi dalam sentimeter (cm). Contoh 7,25.</p>
+      <div class="dimension-fields" role="group" aria-describedby="dimensions-hint">
+        <div class="form-field"><label for="dimension-length-input">Panjang</label>
+          <input id="dimension-length-input" name="length" type="text" inputmode="decimal" required /></div>
+        <div class="form-field"><label for="dimension-height-input">Tinggi</label>
+          <input id="dimension-height-input" name="height" type="text" inputmode="decimal" required /></div>
+      </div>
+      <p class="field-error" id="dimensions-error" role="alert" hidden></p>
+      <div class="dialog-actions"><button class="button button-secondary" type="button"
+          data-close-dialog>Batal</button><button class="button button-primary" type="submit">Simpan dimensi<svg
+            class="icon">
+            <use href="#i-check" />
+          </svg></button></div>
+    </form>
+  </dialog>
+
   <dialog id="history-dialog" class="dialog history-dialog" aria-labelledby="history-title">
     <div class="dialog-heading">
       <div><span class="eyebrow">ARSIP PERANGKAT INI</span>
@@ -349,8 +387,9 @@
         <p>Aktifkan kamera perangkat atau unggah gambar JPG, PNG, atau WebP. Tombol ambil gambar menyimpan foto ke
           perangkat.</p>
       </li>
-      <li><strong>Konfirmasi berat dan golongan</strong>
-        <p>Kamera mengenali jenis kendaraan. Pilih golongan melalui tombol Ubah. Pengukuran dimensi belum tersedia.</p>
+      <li><strong>Periksa berat, golongan, dan dimensi</strong>
+        <p>Panjang dan tinggi terisi otomatis setelah koin dan satu kendaraan terdeteksi. Gunakan Ubah untuk mengoreksi
+          ukuran dalam cm. Pilih golongan di panel Golongan.</p>
       </li>
       <li><strong>Isi nama pengemudi</strong>
         <p>Pastikan nama pengemudi sesuai identitas pengemudi kendaraan sebelum menerbitkan tiket.</p>

@@ -3,6 +3,7 @@ import { STORAGE_KEY, MAX_HISTORY, CATEGORIES, categoryInfo, createTicket, forma
 import './live_detection.js';
 
 const $ = selector => document.querySelector(selector);
+const DIMENSION_FIELDS = { length: 'P', height: 'T' };
 const state = {
   weight: 0,
   category: '',
@@ -16,10 +17,11 @@ const state = {
   pendingIssue: false,
   sensorLive: false,
   manualWeightOverride: false,
+  manualDimensionOverride: false,
+  cameraDimensions: null,
+  lastDimensionReading: null,
   cvActive: false,
-  length: '—',
-  width: '—',
-  height: '—',
+  dimensions: {},
   vehicleType: 'Belum ada hasil deteksi',
   anomalyScore: 0
 };
@@ -66,6 +68,36 @@ function toast(message) {
 }
 
 function showDialog(dialog) { if (!dialog.open) dialog.showModal(); }
+
+function formatDimensions({ length, height }) {
+  const values = [length, height].map(value => value ?? '—');
+  return values.some(value => value !== '—') ? `${values.join(' × ')} cm` : 'Belum diisi';
+}
+
+function inspectionDimensions() {
+  if (state.issued) return state.issued;
+  return state.manualDimensionOverride ? state.dimensions : (state.cameraDimensions ?? state.dimensions);
+}
+
+function renderDimensions() {
+  const dimensions = inspectionDimensions();
+  for (const field of Object.keys(DIMENSION_FIELDS)) {
+    const reading = $(`#dim-${field}`);
+    const value = dimensions[field];
+    if (reading) {
+      reading.textContent = value ?? '—';
+      if (value && value !== '—') reading.append(document.createTextNode(' '), element('small', '', 'cm'));
+    }
+  }
+  if ($('#dim-status')) {
+    const hasDimensions = Object.keys(DIMENSION_FIELDS).some(field => dimensions[field] && dimensions[field] !== '—');
+    $('#dim-status').textContent = state.issued ? 'Tiket terbit'
+      : state.manualDimensionOverride ? 'Input operator'
+      : state.cameraDimensions !== null ? (hasDimensions ? 'Kamera · 50 yen' : 'Menunggu hasil kamera')
+      : hasDimensions ? 'API' : 'Belum diisi';
+  }
+  if ($('#ticket-dimensions')) $('#ticket-dimensions').textContent = formatDimensions(dimensions);
+}
 
 function updateClock() {
   const now = new Date();
@@ -119,9 +151,7 @@ function renderInspection() {
 
   if ($('#class-description')) $('#class-description').textContent = category?.label || 'Kendaraan Teridentifikasi';
 
-  if ($('#dim-length')) $('#dim-length').replaceChildren(document.createTextNode(`${state.length} `), element('small', '', 'cm'));
-  if ($('#dim-width')) $('#dim-width').replaceChildren(document.createTextNode(`${state.width} `), element('small', '', 'cm'));
-  if ($('#dim-height')) $('#dim-height').replaceChildren(document.createTextNode(`${state.height} `), element('small', '', 'cm'));
+  renderDimensions();
 
   if ($('#vehicle-summary')) $('#vehicle-summary').textContent = state.vehicleType;
 
@@ -139,12 +169,7 @@ function renderInspection() {
     statusDesc.append(statusPill);
   }
 
-  const dimStatus = $('#dim-status');
-  if (dimStatus) {
-    dimStatus.textContent = 'Dimensi belum tersedia';
-    dimStatus.className = isAnomaly ? 'status-anomaly' : 'status-normal';
-  }
-
+  if ($('#edit-dimensions')) $('#edit-dimensions').disabled = Boolean(state.issued);
   if ($('#edit-weight')) $('#edit-weight').disabled = Boolean(state.issued);
   if ($('#edit-class')) $('#edit-class').disabled = Boolean(state.issued);
   if ($('#driver-input')) $('#driver-input').readOnly = Boolean(state.issued);
@@ -174,6 +199,7 @@ async function fetchStatusKendaraanFromBackend() {
     const res = await fetch(`${BASE_URL}/api/status-kendaraan?t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('Flask Backend Offline');
     const data = await res.json();
+    if (state.issued) return;
 
     // 1. Format label Jenis Kendaraan
     if (data.jenis && data.waktu && !state.cvActive) {
@@ -210,18 +236,18 @@ async function fetchStatusKendaraanFromBackend() {
       }
     }
 
-    // 3. Pembacaan DIMENSI (P, L, T) dari Postman / Sistem
-    if (Number(data.P) > 0) {
-      const numP = Number(data.P);
-      state.length = !Number.isNaN(numP) ? numP.toFixed(2).replace('.', ',') : String(data.P).replace('.', ',');
-    }
-    if (Number(data.L) > 0) {
-      const numL = Number(data.L);
-      state.width = !Number.isNaN(numL) ? numL.toFixed(2).replace('.', ',') : String(data.L).replace('.', ',');
-    }
-    if (Number(data.T) > 0) {
-      const numT = Number(data.T);
-      state.height = !Number.isNaN(numT) ? numT.toFixed(2).replace('.', ',') : String(data.T).replace('.', ',');
+    // Ingat pembacaan API terakhir agar tidak muncul lagi pada kendaraan berikutnya.
+    const dimensionReading = JSON.stringify([data.waktu, data.P, data.T]);
+    if (dimensionReading !== state.lastDimensionReading) {
+      state.lastDimensionReading = dimensionReading;
+      if (!state.manualDimensionOverride) {
+        const dimensions = {};
+        for (const [field, key] of Object.entries(DIMENSION_FIELDS)) {
+          const value = Number(data[key]);
+          if (Number.isFinite(value) && value > 0) dimensions[field] = value.toFixed(2).replace('.', ',');
+        }
+        state.dimensions = dimensions;
+      }
     }
 
     // 4. Pembacaan GOLONGAN & STATUS ANOMALI
@@ -266,6 +292,41 @@ if ($('#class-input')) {
 if ($('#edit-weight')) $('#edit-weight').addEventListener('click', () => openEditor());
 if ($('#edit-class')) $('#edit-class').addEventListener('click', () => openEditor('category'));
 
+const dimensionsForm = $('#dimensions-form');
+if (dimensionsForm) {
+  const inputs = Object.keys(DIMENSION_FIELDS).map(field => dimensionsForm.elements.namedItem(field));
+  const dialog = $('#dimensions-dialog');
+  const error = $('#dimensions-error');
+  $('#edit-dimensions').addEventListener('click', () => {
+    if (state.issued) return;
+    const dimensions = inspectionDimensions();
+    for (const input of inputs) input.value = dimensions[input.name] ?? '';
+    error.hidden = true;
+    showDialog(dialog);
+    inputs[0].focus();
+  });
+  dimensionsForm.addEventListener('submit', event => {
+    event.preventDefault();
+    if (state.issued) return;
+    const invalidInput = inputs.find(input => {
+      const raw = input.value.trim();
+      const value = Number(raw.replace(',', '.'));
+      return !/^\d*[.,]?\d+$/.test(raw) || !Number.isFinite(value) || value <= 0;
+    });
+    if (invalidInput) {
+      error.textContent = 'Masukkan angka lebih dari 0 untuk setiap dimensi.';
+      error.hidden = false;
+      invalidInput.focus();
+      return;
+    }
+    state.dimensions = Object.fromEntries(inputs.map(input => [input.name, input.value.trim().replace('.', ',')]));
+    state.manualDimensionOverride = true;
+    dialog.close();
+    renderInspection();
+    toast('Dimensi kendaraan telah disimpan.');
+  });
+}
+
 if ($('#edit-form')) {
   $('#edit-form').addEventListener('submit', event => {
     event.preventDefault();
@@ -304,13 +365,13 @@ if ($('#driver-input')) {
 
 function issueTicket() {
   if (state.issued) return;
+  const dimensions = inspectionDimensions();
   const inspection = {
     driver: $('#driver-input').value,
     weight: state.weight,
     category: state.category,
-    length: state.length,
-    width: state.width,
-    height: state.height,
+    length: dimensions.length ?? '—',
+    height: dimensions.height ?? '—',
     vehicleStatus: state.vehicleStatus,
   };
   const errors = validateInspection(inspection);
@@ -368,6 +429,9 @@ if ($('#next-vehicle')) {
   $('#next-vehicle').addEventListener('click', () => {
     state.issued = null;
     state.manualWeightOverride = false;
+    state.manualDimensionOverride = false;
+    if (state.cameraDimensions !== null) state.cameraDimensions = {};
+    state.dimensions = {};
     state.category = '';
     state.vehicleStatus = 'Normal';
     state.vehicleType = 'Belum ada hasil deteksi';
@@ -394,12 +458,12 @@ function renderPrint(ticket) {
   title.append(element('h1', '', 'TIKET MASUK'), element('p', '', ticket.number));
   const driverName = ticket.driver || ticket.plate;
   const statusLabel = ticket.vehicleStatus === 'Terindikasi Anomali' ? 'Anomali (Pemeriksaan Lanjutan)' : 'Normal (Sesuai Ketentuan)';
-  const dimText = `${ticket.length ?? state.length} × ${ticket.width ?? state.width} × ${ticket.height ?? state.height} cm`;
+  const dimText = formatDimensions(ticket);
   const details = element('dl', 'receipt-details');
   for (const [label, value] of [
     ['Nama pengemudi', driverName], ['Berat kendaraan', `${formatWeight(ticket.weight)} g`],
     ['Golongan', `${ticket.category} · ${categoryInfo(ticket.category)?.label || 'Kendaraan Barang'}`],
-    ['Dimensi (P × L × T)', dimText],
+    ['Panjang × tinggi', dimText],
     ['Kondisi kendaraan', statusLabel],
     ['Waktu terbit', dateTime(ticket.createdAt)],
   ]) {
@@ -657,9 +721,20 @@ setInterval(updateClock, 1000);
 
 fetchStatusKendaraanFromBackend();
 setInterval(fetchStatusKendaraanFromBackend, 1000);
+window.addEventListener('ferqueue:camera-measurement', event => {
+  const { active, estimate } = event.detail;
+  state.cameraDimensions = active ? {} : null;
+  if (estimate) {
+    state.cameraDimensions = {
+      length: estimate.length_cm.toFixed(2).replace('.', ','),
+      height: estimate.height_cm.toFixed(2).replace('.', ','),
+    };
+  }
+  if (!state.issued && !state.manualDimensionOverride) renderDimensions();
+});
 window.addEventListener('ferqueue:cv-result', event => {
   state.cvActive = true;
-  state.vehicleType = event.detail.detections.length
+  state.vehicleType = event.detail.calibration_only ? 'Kalibrasi koin aktif' : event.detail.detections.length
     ? [...new Set(event.detail.detections.map(item => item.class_name))].join(', ')
     : 'Belum ada kendaraan terdeteksi';
   renderInspection();
