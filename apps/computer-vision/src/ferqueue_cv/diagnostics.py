@@ -8,8 +8,14 @@ from pathlib import Path
 
 def compare_weights(training, exported):
     import numpy as np
-    training_keys = {name for name in training.get_variable_to_shape_map() if name.startswith('model/')}
-    exported_keys = {name for name in exported.get_variable_to_shape_map() if name.startswith('model/')}
+
+    def model_keys(reader):
+        # TensorFlow stores momentum slots under the paths of their model variables.
+        return {name for name in reader.get_variable_to_shape_map()
+                if name.startswith('model/') and '/.OPTIMIZER_SLOT/' not in name}
+
+    training_keys = model_keys(training)
+    exported_keys = model_keys(exported)
     shared = sorted(training_keys & exported_keys)
     differences, invalid_training, invalid_export = [], [], []
     identical = 0

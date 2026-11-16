@@ -16,9 +16,14 @@ class DiagnosisTests(unittest.TestCase):
         return Reader()
 
     def test_model_weights_match_despite_optimizer_and_counter_extras(self):
-        training = self.reader({'model/weight': [1., 2.], 'optimizer/slot': [5.], 'step/.ATTRIBUTES/VARIABLE_VALUE': 3000})
+        training = self.reader({'model/weight': [1., 2.],
+                                'model/weight/.OPTIMIZER_SLOT/optimizer/momentum/.ATTRIBUTES/VARIABLE_VALUE': [5.],
+                                'step/.ATTRIBUTES/VARIABLE_VALUE': 3000})
         exported = self.reader({'model/weight': [1., 2.], 'save_counter': 1})
-        self.assertTrue(diagnosis.compare_weights(training, exported)['all_model_weights_identical'])
+        comparison = diagnosis.compare_weights(training, exported)
+        self.assertTrue(comparison['all_model_weights_identical'])
+        self.assertEqual(comparison['training_variable_count'], 1)
+        self.assertEqual(comparison['missing_from_export'], [])
         self.assertEqual(diagnosis.global_step(training), 3000)
 
     def test_missing_or_different_model_weights_are_reported(self):

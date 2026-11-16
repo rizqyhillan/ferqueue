@@ -171,7 +171,7 @@ cp -i apps/computer-vision/configs/coco-rtx4060.json "$PCV_CONFIG"
 nano "$PCV_CONFIG"
 ```
 
-Di salinan tersebut, ubah `run_dir` menjadi `models/mobilenet/runs/pcv-coco-rtx4060-002` atau folder kosong lain. Untuk pembanding, gunakan `batch_size` 4, `epochs` 30, `learning_rate` 0.004, dan preprocessing bawaan (`denoise_kernel` 0, `clahe_clip_limit` 0, `gamma` 1.0). Training memakai gambar utuh dan anotasi bounding box. Run baru mulai dari bobot pretrained COCO. Folder `pcv-coco-rtx4060-001` tetap bisa dipakai untuk membandingkan model sebelumnya.
+Di salinan tersebut, ubah `run_dir` menjadi `models/mobilenet/runs/pcv-coco-rtx4060-002` atau folder kosong lain. Gunakan `batch_size` 4, `epochs` 30, `learning_rate` 0.004, dan preprocessing bawaan (`denoise_kernel` 0, `clahe_clip_limit` 0, `gamma` 1.0). Setel `freeze_batchnorm` ke `false` agar statistik normalisasi di bagian prediksi kelas dan kotak ikut belajar dari data baru. Run baru mulai dari bobot pretrained COCO dan memakai gambar utuh serta anotasi bounding box.
 
 Jika dataset sama, pakai ulang `dataset_dir`, `coco_annotations`, dan `prepared_dir`. Jika data, label, atau split berubah, ulangi bagian 4 dengan folder hasil konversi baru, arahkan config ke JSON COCO tersebut, dan gunakan `prepared_dir` baru. Jalankan `prepare` hanya jika manifest untuk versi data ini belum dibuat.
 
@@ -279,6 +279,7 @@ Browser menggambar kotak di `drawDetections()` pada `apps/web-monitoring/static/
 | `object_detection` atau `pipeline_pb2` tidak ditemukan | Periksa struktur `.cache/tensorflow-models/research` dan hasil kompilasi `protoc`. |
 | Converter tidak menemukan gambar atau kelas berbeda | Buat staging di Ubuntu yang menjalankan converter. Periksa `classes` pada `main.py` dan kedua JSON hasil converter. |
 | `ResourceExhaustedError` atau CUDA kehabisan memori | Tutup proses lain yang memakai GPU. Coba batch 2 dengan `run_dir` baru jika masih kehabisan VRAM. |
+| Hampir semua gambar mendapat kelas, skor, dan posisi kotak yang sama | Jalankan `python pcv.py diagnose --config "$PCV_CONFIG"` dan bandingkan deteksi teratas pada sampel serta gambar abu-abu kosong. Jika checkpoint memakai `freeze_batchnorm: true` dan prediksinya seragam, buat run baru dengan `freeze_batchnorm: false`. Uji kembali model pada mobil, truk, bus, dan frame kosong sebelum menjalankan webcam. |
 | Dashboard tidak bisa dibuka dari Windows | Coba `curl -f http://127.0.0.1:5000/api/cv/health` dari Ubuntu. Jika berhasil di Ubuntu, periksa akses `localhost` dari Windows dan pastikan port 5000 tidak sedang dipakai layanan lain. |
 | Dashboard terbuka, tetapi PCV belum siap | Cek terminal `serve`, health port 8000, `CV_API_URL`, dan `export.json` pada run yang dipilih. |
 
