@@ -1,81 +1,101 @@
 import numpy as np
 from sklearn.cluster import KMeans
-from sklearn.ensemble import IsolationForest
 
-# Batas hukum disesuaikan untuk SKALA DIECAST (Hot Wheels / miniatur)
-# Dimensi dalam CM, Berat dalam GRAM
+# ==============================================================================
 LEGAL = dict(P_max=25.0, L_max=8.0, T_max=10.0)
-TOL = 0.10                      # toleransi ukur 10% (karakteristik diecast bervariasi)
-BATAS_PANJANG = (6, 9, 13)      # batas antar golongan dalam CM
+TOL = 0.10
 
-# Rentang tiap golongan untuk skala diecast/miniatur.
-# P, L, T dalam CM; W dalam GRAM.
-# Acuan Hot Wheels 1:64: mobil ~6-8 cm (30-60 g), truk/bus ~7-14 cm (40-120 g)
+
 RULES = {
-    "A": dict(kelas="mobil", P=(4.0, 8.0),   L=(1.5, 4.0),  T=(1.0, 3.5), W=(10, 80)),
-    "B": dict(kelas="bus",   P=(6.0, 9.0),   L=(1.5, 3.5),  T=(1.5, 4.0), W=(20, 100)),
-    "C": dict(kelas="bus",   P=(9.0, 15.0),  L=(2.0, 4.0),  T=(2.0, 5.0), W=(40, 150)),
-    "D": dict(kelas="truk",  P=(4.0, 6.0),   L=(1.5, 3.5),  T=(1.5, 4.0), W=(15, 90)),
-    "E": dict(kelas="truk",  P=(6.0, 13.0),  L=(1.5, 4.5),  T=(2.0, 5.0), W=(30, 150)),
+    "A": dict(kelas="mobil", P=(4.0, 7.0),   L=(1.8, 2.7),  T=(1.8, 2.5),  W_max=40.0),
+    "B":   dict(kelas="bus",   P=(7.0, 15.0),  L=(2.0, 4.0),  T=(2.5, 4.0), W_max=150.0),
+    "C":  dict(kelas="truk",  P=(10.0, 12.0),  L=(2.0, 4.0),  T=(2.5, 4.0),  W_max=200.0),
 }
 FEATS = ["P", "L", "T", "W"]
 
 
-def golongan(jenis, p):
-    """Golongan dari jenis dan panjang (cm). None = tidak terdefinisi."""
-    if jenis == "mobil":
-        return "A" if p <= 8 else None
-    if jenis == "bus":
-        if p <= 9:  return "B"
-        if p <= 15: return "C"
+def golongan(jenis, P=None):
+    """
+    Menentukan golongan ('A', 'B', 'C') berdasarkan jenis kendaraan ('mobil', 'bus', 'truk')
+    atau langsung mengembalikan golongan jika input sudah 'A', 'B', atau 'C'.
+    """
+    if not jenis:
         return None
-    if jenis == "truk":
-        if p <= 6:  return "D"
-        if p <= 13: return "E"
-        return None
+    j = str(jenis).strip()
+
+    # Jika input sudah berupa kode golongan (A, B, C)
+    if j.upper() in RULES:
+        return j.upper()
+
+    # Cari golongan yang memiliki atribut kelas == jenis (misal 'mobil' -> 'A')
+    j_lower = j.lower()
+    for g, info in RULES.items():
+        if info.get("kelas") == j_lower:
+            return g
+
     return None
 
 
 def cek_aturan(jenis, P, L, T, W):
-    """Lapis aturan: TOLAK (batas hukum) / INSPEKSI / OK. Satuan: cm & gram."""
+    """
+    LAPIS 1: Rule-Based System (Penegakan Batas Hukum & Over Dimension Over Load)
+    Returns: dict(golongan, status, alasan)
+    """
     alasan, tolak, insp = [], False, False
-    if L > LEGAL["L_max"]: tolak = True; alasan.append(f"lebar {L:.2f} cm melebihi batas {LEGAL['L_max']} cm")
-    if T > LEGAL["T_max"]: tolak = True; alasan.append(f"tinggi {T:.2f} cm melebihi batas {LEGAL['T_max']} cm")
-    if P > LEGAL["P_max"]: tolak = True; alasan.append(f"panjang {P:.2f} cm melebihi batas {LEGAL['P_max']} cm")
     g = golongan(jenis, P)
+
+    # --- A. Cek Batas Legal Absolut Pelabuhan (ODOL) ---
+    if L > LEGAL["L_max"]:
+        tolak = True
+        alasan.append(f"Lebar {L:.2f} cm melebihi batas legal ({LEGAL['L_max']} cm)")
+    if T > LEGAL["T_max"]:
+        tolak = True
+        alasan.append(f"Tinggi {T:.2f} cm melebihi batas legal ({LEGAL['T_max']} cm)")
+    if P > LEGAL["P_max"]:
+        tolak = True
+        alasan.append(f"Panjang {P:.2f} cm melebihi batas legal ({LEGAL['P_max']} cm)")
+
     if g is None:
-        insp = True; alasan.append("panjang tidak masuk golongan manapun untuk jenis ini")
+        insp = True
+        alasan.append(f"Jenis kendaraan '{jenis}' tidak terdefinisi dalam sistem")
     else:
         r = RULES[g]
-        if W > r["W"][1] * (1 + TOL):
-            tolak = True; alasan.append(f"berat {W:.2f} g melebihi batas golongan {g} ({r['W'][1]} g)")
-        for nama, key, val in (("panjang", "P", P), ("lebar", "L", L), ("tinggi", "T", T), ("berat", "W", W)):
-            lo, hi = r[key]
-            if nama == "berat" and val > hi:
-                continue
+
+        # --- B. Cek Berat Melebihi Batas Maksimum Golongan (TOLAK) ---
+        if W > r["W_max"] * (1 + TOL):
+            tolak = True
+            alasan.append(f"Berat {W:.2f} g melebihi batas maksimum {g} ({r['W_max']} g)")
+
+        # --- C. Cek Dimensi di Luar Rentang Kewajaran Sejenis (INSPEKSI) ---
+        for nama, val, (lo, hi) in [("panjang", P, r["P"]), ("lebar", L, r["L"]), ("tinggi", T, r["T"])]:
             if val < lo * (1 - TOL) or val > hi * (1 + TOL):
-                insp = True; alasan.append(f"{nama} {val:.2f} di luar rentang wajar {g} ({lo}-{hi})")
-        if any(abs(P - b) / b <= TOL for b in BATAS_PANJANG):
-            insp = True; alasan.append("panjang dekat batas golongan (zona toleransi)")
+                insp = True
+                alasan.append(f"{nama} {val:.2f} cm di luar rentang wajar {g} ({lo}-{hi} cm)")
+
     status = "TOLAK" if tolak else ("INSPEKSI" if insp else "OK")
     return dict(golongan=g, status=status, alasan=alasan)
 
 
 def feat(x):
-    """Fitur anomali = log(P, L, T, W) dalam satuan cm & gram."""
+    """Fitur anomali ML = log(P, L, T, W) dalam satuan cm & gram."""
     a = np.asarray(x[FEATS] if hasattr(x, "columns") else x, dtype=float)
     return np.log(a)
 
 
-def fit_models(Z, k, seed):
+def fit_models(Z, k=3, seed=42):
+    """
+    LAPIS 2: Melatih model K-Means dengan K=3 (mewakili pusat klaster Mobil, Bus, Truk Normal).
+    """
     return dict(
-        kmeans=KMeans(k, n_init=10, random_state=seed).fit(Z),
-        iforest=IsolationForest(n_estimators=200, random_state=seed).fit(Z),
+        kmeans=KMeans(n_clusters=k, n_init=10, random_state=seed).fit(Z),
     )
 
 
 def skor(name, model, Z):
-    """Skor anomali: makin besar makin janggal."""
-    if name == "kmeans":
-        return model.transform(Z).min(axis=1)   # jarak ke centroid terdekat
-    return -model.score_samples(Z)               # Isolation Forest
+    """
+    Skor Anomali K-Means: Jarak Euclidean terdekat ke centroid kendaraan normal.
+    Semakin besar skor, semakin menyimpang dari proporsi fisik wajar.
+    """
+    if hasattr(model, "transform"):
+        return model.transform(Z).min(axis=1)
+    return np.zeros(len(Z))

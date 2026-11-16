@@ -31,6 +31,14 @@ class CameraIntegrationTests(unittest.TestCase):
         self.assertEqual(sent.data, b'jpeg-bytes')
         self.assertNotIn('Origin', sent.headers)
 
+    def test_coin_region_and_measurement_pass_through_bridge(self):
+        payload = {'detections': [], 'calibration': {'status': 'coin_not_found'}}
+        region = '.2,.6,.4,.8'
+        with patch('cv_bridge.urlopen', return_value=io.BytesIO(json.dumps(payload).encode())) as upstream:
+            result = self.client.post('/api/detect', data=b'jpeg', content_type='image/jpeg', headers={'X-Coin-Region': region})
+        self.assertEqual(result.json, payload)
+        self.assertEqual(upstream.call_args.args[0].get_header('X-coin-region'), region)
+
     def test_pcv_offline_has_actionable_message(self):
         with patch('cv_bridge.urlopen', side_effect=URLError('offline')):
             result = self.client.post('/api/detect', data=b'jpeg', content_type='image/jpeg')

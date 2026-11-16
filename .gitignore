@@ -4,13 +4,14 @@ __pycache__/
 .venv/
 .venv-data/
 .venv-cv/
+.venv-pcv/
 .venv-training/
 .venv-tools/
 .venv-inference/
 .venv-web/
 .cache/
 venv/
-.pytest_cache/
+.pytest_cache/s
 .mypy_cache/
 
 # Environment and secrets
@@ -61,3 +62,4 @@ outputs/*
 !outputs/.gitkeep
 models/mobilenet/*
 !models/mobilenet/.gitkeep
+agents.md

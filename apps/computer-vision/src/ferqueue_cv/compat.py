@@ -1,6 +1,5 @@
 """Use TensorFlow's public compatibility API in the tf-slim 1.1 image decoder."""
 
-import argparse
 import importlib.util
 from pathlib import Path
 
@@ -46,15 +45,7 @@ def check_decoder():
     print('Decoder JPEG/PNG tf-slim berhasil diuji di dalam tf.function.', flush=True)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--check-only', action='store_true', help='Uji decoder tanpa mengubah paket.')
-    args = parser.parse_args()
-    if not args.check_only:
-        changed = patch_decoder()
-        print('Kompatibilitas tf-slim diperbarui.' if changed else 'Kompatibilitas tf-slim sudah sesuai.', flush=True)
+def fix_decoder():
+    changed = patch_decoder()
+    print('Kompatibilitas tf-slim diperbarui.' if changed else 'Kompatibilitas tf-slim sudah sesuai.', flush=True)
     check_decoder()
-
-
-if __name__ == '__main__':
-    main()
