@@ -1,0 +1,885 @@
+/* ==========================================================================
+   FERQUEUE Web Monitoring — Monitoring / Pemeriksaan Styles
+   monitoring.css
+   ========================================================================== */
+
+.mon-grid {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.mon-left {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mon-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Badge for CAM 01 • SIDE VIEW */
+.badge-cam {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--clr-accent-light);
+  color: var(--clr-accent);
+  letter-spacing: 0.04em;
+}
+
+/* --------------------------------------------------------------------------
+   CAMERA VIEWPORT WITH HIGH-TECH OVERLAYS
+   -------------------------------------------------------------------------- */
+.mon-cam-viewport {
+  background: #071321;
+  position: relative;
+  min-height: 310px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.mon-cam-img {
+  width: 90%;
+  max-height: 290px;
+  object-fit: contain;
+  filter: contrast(1.05);
+}
+
+/* Top bar overlay */
+.mon-cam-overlay-top {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94A3B8;
+  pointer-events: none;
+}
+
+.mon-cam-rec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #EF4444;
+  font-weight: 700;
+}
+
+.mon-cam-rec::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #EF4444;
+  animation: rec-blink 1.5s infinite;
+}
+
+@keyframes rec-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.mon-cam-tag {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+
+/* AI Bounding Box Overlay */
+.mon-cam-bbox {
+  position: absolute;
+  top: 48px;
+  bottom: 44px;
+  left: 18%;
+  right: 18%;
+  border: 1.5px dashed #0EA5E9;
+  pointer-events: none;
+}
+
+/* Corner markers */
+.mon-cam-bbox::before,
+.mon-cam-bbox::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #0EA5E9;
+}
+.mon-cam-bbox::before { top: -4px; left: -4px; }
+.mon-cam-bbox::after  { bottom: -4px; right: -4px; }
+
+.mon-cam-bbox-label {
+  position: absolute;
+  top: -10px;
+  left: 8px;
+  background: #0EA5E9;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mon-cam-bbox-dims {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(7, 19, 33, 0.85);
+  border: 1px solid #0EA5E9;
+  color: #38BDF8;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+/* Bottom bar overlay */
+.mon-cam-overlay-bottom {
+  position: absolute;
+  bottom: 10px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #64748B;
+  pointer-events: none;
+}
+
+.mon-cam-port-side {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 1px 8px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   DETECTED INFO SECTION
+   -------------------------------------------------------------------------- */
+.mon-detected-section {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.mon-detected-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--clr-text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mon-detected-eyebrow svg {
+  color: var(--clr-accent);
+}
+
+.mon-detected-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  margin-top: -4px;
+}
+
+.mon-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.mon-metric-box {
+  background: var(--clr-muted-bg);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mon-metric-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clr-text-muted);
+}
+
+.mon-metric-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  font-family: var(--font-mono);
+  line-height: 1.1;
+}
+
+.mon-metric-val small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--clr-text-muted);
+  margin-left: 2px;
+}
+
+.mon-metric-limit {
+  font-size: 10.5px;
+  color: var(--clr-text-faint);
+  margin-top: 2px;
+}
+
+.mon-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--clr-success-bg);
+  color: var(--clr-success-text);
+  margin-top: 4px;
+  width: fit-content;
+}
+
+.mon-status-pill.is-danger {
+  background: var(--clr-danger-bg);
+  color: var(--clr-danger-text);
+}
+
+/* Action Buttons */
+.mon-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--clr-border-light);
+  background: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   RIGHT COLUMN CARDS
+   -------------------------------------------------------------------------- */
+
+/* Weight Card */
+.mon-weight-header-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--clr-success-text);
+}
+
+.mon-weight-header-right::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--clr-success);
+}
+
+.mon-weight-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.mon-weight-num {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.mon-weight-unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--clr-text-muted);
+}
+
+.mon-weight-bar {
+  height: 8px;
+  background: var(--clr-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.mon-weight-bar-fill {
+  height: 100%;
+  width: 35%;
+  background: #0284C7;
+  border-radius: var(--radius-full);
+}
+
+.mon-weight-limits {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--clr-text-muted);
+}
+
+/* Dimension & Classification Card */
+.mon-class-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.mon-class-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clr-text-muted);
+}
+
+.mon-class-dims-right {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--clr-text-muted);
+}
+
+.mon-class-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.mon-class-code {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  letter-spacing: -0.01em;
+}
+
+.mon-class-sub {
+  font-size: 12px;
+  color: var(--clr-text-muted);
+}
+
+.mon-class-status-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--clr-success-text);
+}
+
+/* Ticket Issuance Card */
+.badge-siap-cetak {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  background: #E0F2FE;
+  color: #0284C7;
+  letter-spacing: 0.05em;
+}
+
+.mon-ticket-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mon-ticket-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clr-text-muted);
+}
+
+.mon-ticket-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mon-ticket-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--clr-text-muted);
+}
+
+.mon-ticket-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 34px;
+  background: var(--clr-input-bg);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--clr-text-dark);
+  outline: none;
+}
+
+.mon-ticket-input:focus {
+  background: #ffffff;
+  border-color: var(--clr-accent);
+}
+
+.mon-ticket-tariff-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--clr-border-light);
+  border-bottom: 1px solid var(--clr-border-light);
+}
+
+.mon-ticket-tariff-lbl {
+  font-size: 12px;
+  color: var(--clr-text-muted);
+  font-weight: 500;
+}
+
+.mon-ticket-tariff-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  font-family: var(--font-mono);
+}
+
+.mon-ticket-submit-btn {
+  width: 100%;
+  height: 42px;
+  background: var(--clr-navy);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.mon-ticket-submit-btn:hover {
+  background: var(--clr-primary-hover);
+}
+
+/* --------------------------------------------------------------------------
+   TICKET POPUP MODAL & PRINTABLE RECEIPT
+   -------------------------------------------------------------------------- */
+.ticket-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 39, 68, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  padding: 16px;
+}
+
+.ticket-modal-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ticket-modal-card {
+  background: #ffffff;
+  border-radius: 18px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 20px 45px -10px rgba(12, 39, 68, 0.4);
+  position: relative;
+  transform: translateY(20px) scale(0.96);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ticket-modal-backdrop.is-open .ticket-modal-card {
+  transform: translateY(0) scale(1);
+}
+
+.ticket-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(241, 245, 249, 0.8);
+  color: var(--clr-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  z-index: 10;
+}
+
+.ticket-modal-close:hover {
+  background: #E2E8F0;
+  color: var(--clr-text-dark);
+}
+
+/* Receipt Area */
+.ticket-receipt {
+  padding: 24px 24px 18px;
+  background: #ffffff;
+}
+
+.ticket-receipt__header {
+  border-bottom: 1px solid var(--clr-border-light);
+  padding-bottom: 14px;
+}
+
+.ticket-receipt__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ticket-receipt__logo {
+  width: 36px;
+  height: 36px;
+  background: var(--clr-navy);
+  color: #ffffff;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ticket-receipt__corp {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--clr-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ticket-receipt__title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  letter-spacing: -0.01em;
+}
+
+.ticket-receipt__loc {
+  font-size: 11px;
+  color: var(--clr-text-faint);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Number & Status Block */
+.ticket-receipt__number-block {
+  text-align: center;
+  padding: 16px 0 12px;
+}
+
+.ticket-receipt__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--clr-success-bg);
+  color: var(--clr-success);
+  border: 1px solid #BBF7D0;
+  margin-bottom: 6px;
+}
+
+.ticket-receipt__badge.is-danger {
+  background: var(--clr-danger-bg);
+  color: var(--clr-danger);
+  border-color: #FECACA;
+}
+
+.ticket-receipt__number {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  letter-spacing: 0.02em;
+}
+
+.ticket-receipt__time {
+  font-size: 11px;
+  color: var(--clr-text-muted);
+  margin-top: 2px;
+}
+
+/* Perforation Divider */
+.ticket-receipt__divider {
+  position: relative;
+  margin: 12px -24px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.ticket-receipt__cutout-left,
+.ticket-receipt__cutout-right {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(12, 39, 68, 0.65);
+  top: 1px;
+}
+
+.ticket-receipt__cutout-left { left: -8px; }
+.ticket-receipt__cutout-right { right: -8px; }
+
+.ticket-receipt__dashed-line {
+  width: 100%;
+  border-top: 2px dashed #CBD5E1;
+  margin: 0 12px;
+}
+
+/* Details Grid */
+.ticket-receipt__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.ticket-receipt__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.ticket-receipt__lbl {
+  color: var(--clr-text-muted);
+}
+
+.ticket-receipt__val {
+  font-weight: 600;
+  color: var(--clr-text-dark);
+  text-align: right;
+}
+
+.ticket-receipt__val--bold {
+  color: var(--clr-primary);
+  font-weight: 700;
+}
+
+.ticket-receipt__val--mono {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.ticket-receipt__val--status {
+  color: var(--clr-success);
+}
+
+.ticket-receipt__val--status.is-danger {
+  color: var(--clr-danger);
+}
+
+/* Total Box */
+.ticket-receipt__total-box {
+  background: var(--clr-muted-bg);
+  border: 1px dashed var(--clr-border-dark);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ticket-receipt__total-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--clr-text-dark);
+}
+
+.ticket-receipt__total-amount {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--clr-navy);
+}
+
+/* Barcode Area */
+.ticket-receipt__barcode-box {
+  text-align: center;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--clr-border-light);
+}
+
+.ticket-receipt__barcode-lines {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 38px;
+  margin-bottom: 4px;
+}
+
+.ticket-receipt__barcode-lines span {
+  background: #0F172A;
+  height: 100%;
+  display: inline-block;
+}
+
+.ticket-receipt__barcode-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--clr-text-muted);
+  font-weight: 600;
+}
+
+.ticket-receipt__footer-note {
+  font-size: 10px;
+  color: var(--clr-text-faint);
+  margin-top: 6px;
+}
+
+/* Modal Actions */
+.ticket-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  background: var(--clr-page-bg);
+  border-top: 1px solid var(--clr-border-light);
+}
+
+.ticket-modal-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ticket-modal-actions-row .btn {
+  flex: 1;
+}
+
+/* Violation Mode Box & Signatures */
+.ticket-receipt__violation-box {
+  background: #FEF2F2;
+  border: 1.5px solid #FCA5A5;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+
+.ticket-receipt__violation-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #991B1B;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.ticket-receipt__violation-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #7F1D1D;
+}
+
+.ticket-receipt__signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed #F87171;
+}
+
+.ticket-receipt__sig-box {
+  text-align: center;
+  font-size: 10px;
+  color: #991B1B;
+  font-weight: 600;
+}
+
+.ticket-receipt__sig-line {
+  height: 34px;
+  border-bottom: 1px solid #DC2626;
+  margin-top: 4px;
+}
+
+/* Print Styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #ticket-modal,
+  #ticket-modal .ticket-receipt,
+  #ticket-modal .ticket-receipt * {
+    visibility: visible;
+  }
+  #ticket-modal {
+    position: absolute;
+    inset: 0;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+  .ticket-modal-card {
+    box-shadow: none !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+  }
+  .ticket-modal-close,
+  .ticket-modal-actions,
+  .ticket-receipt__cutout-left,
+  .ticket-receipt__cutout-right {
+    display: none !important;
+  }
+}

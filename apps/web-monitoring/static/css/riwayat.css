@@ -1,0 +1,444 @@
+/* ==========================================================================
+   FERQUEUE Web Monitoring — Riwayat Page Styles
+   riwayat.css
+   ========================================================================== */
+
+/* Top Right Clock & Actions */
+.riwayat-header-clock-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.riwayat-live-api-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #E0F2FE;
+  color: #0284C7;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.riwayat-live-api-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0284C7;
+}
+
+.riwayat-header-clock {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  letter-spacing: -0.01em;
+}
+
+/* 3 Stat Cards in a row */
+.riwayat-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.riwayat-stat-card {
+  background: #ffffff;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.riwayat-stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.riwayat-stat-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--clr-text-muted);
+}
+
+.riwayat-stat-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.riwayat-stat-num {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  line-height: 1;
+}
+
+.riwayat-stat-unit {
+  font-size: 11px;
+  color: var(--clr-text-muted);
+  font-weight: 500;
+}
+
+.riwayat-stat-badge-pass {
+  background: var(--clr-success-bg);
+  color: var(--clr-success-text);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-left: 8px;
+}
+
+.riwayat-stat-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--clr-text-muted);
+}
+
+.riwayat-stat-icon-box--normal {
+  color: var(--clr-success);
+}
+
+.riwayat-stat-icon-box--over {
+  color: var(--clr-danger);
+}
+
+.riwayat-stat-num.is-danger {
+  color: var(--clr-danger);
+}
+
+/* Toolbar: Search & Reset */
+.riwayat-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.riwayat-search-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.riwayat-search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--clr-text-muted);
+}
+
+.riwayat-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px 0 38px;
+  background: #ffffff;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--clr-text-dark);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.riwayat-search-input:focus {
+  border-color: var(--clr-accent);
+  box-shadow: 0 0 0 3px var(--clr-accent-light);
+}
+
+/* 3 Filters Row */
+.riwayat-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.riwayat-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.riwayat-filter-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--clr-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.riwayat-filter-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.riwayat-filter-select-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--clr-text-muted);
+  pointer-events: none;
+}
+
+.riwayat-select {
+  width: 100%;
+  height: 38px;
+  padding: 0 32px 0 34px;
+  background: #ffffff;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--clr-text-dark);
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+.riwayat-select:focus {
+  border-color: var(--clr-accent);
+}
+
+/* Table Card */
+.riwayat-table-card {
+  margin-bottom: 16px;
+}
+
+.riwayat-table-wrap {
+  overflow-x: auto;
+}
+
+.riwayat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.riwayat-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--clr-text-muted);
+  background: var(--clr-muted-bg);
+  border-bottom: 1px solid var(--clr-border);
+  white-space: nowrap;
+}
+
+.riwayat-table tbody td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--clr-border-light);
+  color: var(--clr-text-dark);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.riwayat-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.riwayat-table tbody tr:hover td {
+  background: #F8FAFC;
+}
+
+/* Table cells */
+.cell-ticket-no {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #B91C1C;
+  line-height: 1.2;
+}
+
+.cell-time-date {
+  font-weight: 600;
+  color: var(--clr-text-dark);
+  font-size: 12px;
+}
+
+.cell-time-hour {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--clr-text-muted);
+}
+
+.cell-driver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.cell-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #E0F2FE;
+  color: #0284C7;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cell-avatar--red {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.cell-petugas {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--clr-text-base);
+  font-weight: 500;
+}
+
+.cell-petugas svg {
+  color: var(--clr-text-muted);
+}
+
+.cell-golongan-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: #E0F2FE;
+  color: #0284C7;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cell-dims {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--clr-text-base);
+}
+
+.cell-dims.is-danger {
+  color: #DC2626;
+  font-weight: 700;
+}
+
+.cell-berat {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--clr-navy);
+}
+
+.cell-berat.is-danger {
+  color: #DC2626;
+}
+
+/* Status Badges */
+.pill-status-normal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--clr-success-bg);
+  color: var(--clr-success-text);
+  border: 1px solid #BBF7D0;
+}
+
+.pill-status-over {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+
+/* Pagination Bar */
+.riwayat-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--clr-text-muted);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.riwayat-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.riwayat-page-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--clr-text-base);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.riwayat-page-btn:hover:not([disabled]):not(.is-active) {
+  background: var(--clr-muted-bg);
+  color: var(--clr-text-dark);
+}
+
+.riwayat-page-btn.is-active {
+  background: var(--clr-navy);
+  border-color: var(--clr-navy);
+  color: #ffffff;
+}
+
+.riwayat-page-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.riwayat-page-btn-text {
+  border: none;
+  background: transparent;
+  color: var(--clr-accent);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.riwayat-page-btn-text[disabled] {
+  color: var(--clr-text-faint);
+  cursor: not-allowed;
+}

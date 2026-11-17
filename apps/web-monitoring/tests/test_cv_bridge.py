@@ -12,13 +12,15 @@ class CameraIntegrationTests(unittest.TestCase):
         self.client = app.test_client()
 
     def test_page_loads_camera_module_and_assets(self):
-        page = self.client.get('/')
+        with self.client.session_transaction() as sess:
+            sess['user'] = 'test-operator'
+        page = self.client.get('/monitoring')
         self.assertEqual(page.status_code, 200)
-        self.assertIn(b'/static/app.js', page.data)
-        js = self.client.get('/static/app.js')
+        self.assertIn(b'/static/js/monitoring.js', page.data)
+        js = self.client.get('/static/js/monitoring.js')
         self.assertIn(b"import './live_detection.js'", js.data)
         js.close()
-        with self.client.get('/static/live_detection.js') as module:
+        with self.client.get('/static/js/live_detection.js') as module:
             self.assertEqual(module.status_code, 200)
 
     def test_image_reaches_server_side_pcv_without_browser_origin(self):

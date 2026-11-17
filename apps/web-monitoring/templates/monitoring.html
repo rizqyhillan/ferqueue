@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% block page_title %}Pemeriksaan Kendaraan{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/monitoring.css" />
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header-row">
+  <div class="page-header-left">
+    <h1 class="page-title">Pemeriksaan Kendaraan</h1>
+    <p class="page-subtitle">Verifikasi dimensi optik, timbangan gandar otomatis, dan penerbitan tiket manifest sebelum memasuki dermaga kapal ferry.</p>
+  </div>
+  <div class="page-header-right">
+    <div class="badge-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span>17 Nov 2026</span>
+    </div>
+    <div class="badge-header">
+      <strong id="mon-clock" style="font-family: var(--font-mono); font-size: 13.5px;">16:32:10 WIB</strong>
+    </div>
+  </div>
+</div>
+
+<!-- 2-Column Monitoring Grid -->
+<div class="mon-grid">
+
+  <!-- LEFT COLUMN (~62%) -->
+  <div class="mon-left">
+    <div class="card">
+      <!-- Card Header -->
+      <div class="card__header">
+        <div class="card__header-left">
+          <h2 class="card__title">
+            <span class="card__badge-num">01</span>
+            Kamera Kendaraan
+            <span class="badge-cam">CAM 01 • SIDE VIEW</span>
+          </h2>
+          <p class="card__subtitle">Pemantauan visual &amp; pemindaian dimensi kontur 3D jalur masuk</p>
+        </div>
+        <button class="topbar__btn-icon" title="Perbesar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Camera Viewport with Overlays -->
+      <div class="mon-cam-viewport">
+        <!-- Top bar overlay -->
+        <div class="mon-cam-overlay-top">
+          <span class="mon-cam-rec">REC PRATINJAU SISI</span>
+          <span>60 FPS • 1080P</span>
+          <span class="mon-cam-tag">CAM 01</span>
+        </div>
+
+        <!-- Truck SVG Image -->
+        <img
+          id="camera-feed"
+          src="/static/assets/camera-demo.svg"
+          alt="Truck Camera Feed"
+          class="mon-cam-img"
+        />
+
+        <!-- High-tech Bounding Box Overlay -->
+        <div class="mon-cam-bbox">
+          <div class="mon-cam-bbox-label">
+            <span>■</span>
+            <span>TRUK - DATA CENTER [AI ACC: 98.4%]</span>
+          </div>
+          <div class="mon-cam-bbox-dims" id="cam-overlay-dims">
+            ◄ P: 7.20m | T: 3.20m ►
+          </div>
+        </div>
+
+        <!-- Bottom bar overlay -->
+        <div class="mon-cam-overlay-bottom">
+          <span class="mon-cam-port-side">TAMPAK SAMPING (PORT SIDE)</span>
+          <span id="cam-timestamp">05:45:22.420 UTC</span>
+        </div>
+      </div>
+
+      <!-- Detected Info Section -->
+      <div class="mon-detected-section">
+        <div class="mon-detected-eyebrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+          <span>JENIS KENDARAAN TERDETEKSI AI</span>
+        </div>
+        <div class="mon-detected-title" id="det-vehicle-type">Truk Sedang Boks (Golongan V-A)</div>
+
+        <div class="mon-metrics-row">
+          <!-- Panjang -->
+          <div class="mon-metric-box">
+            <span class="mon-metric-lbl">PANJANG (P)</span>
+            <div class="mon-metric-val">
+              <span id="det-p">720</span><small>cm</small>
+            </div>
+            <span class="mon-metric-limit">Maks: 1.200 cm</span>
+          </div>
+
+          <!-- Tinggi -->
+          <div class="mon-metric-box">
+            <span class="mon-metric-lbl">TINGGI (T)</span>
+            <div class="mon-metric-val">
+              <span id="det-t">320</span><small>cm</small>
+            </div>
+            <span class="mon-metric-limit">Maks: 380 cm</span>
+          </div>
+
+          <!-- Status Dimensi -->
+          <div class="mon-metric-box">
+            <span class="mon-metric-lbl">STATUS DIMENSI</span>
+            <div class="mon-status-pill" id="det-status-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <span>Normal / Lolos</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="mon-actions-row">
+        <button class="btn btn--outline" id="btn-reload-cam">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          <span>Aktifkan Kamera Ulang</span>
+        </button>
+        <button class="btn btn--outline" id="btn-upload-foto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span>Unggah Foto</span>
+        </button>
+        <input type="file" id="file-upload" accept="image/*" style="display:none;" />
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN (~38%) -->
+  <div class="mon-right">
+
+    <!-- Card 1: Timbangan Berat Kendaraan -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title">
+          <span class="card__badge-num">02</span>
+          Timbangan Berat Kendaraan
+        </h2>
+        <span class="mon-weight-header-right">Sensor Timbangan OK</span>
+      </div>
+      <div class="card__body">
+        <div class="mon-weight-val-row">
+          <span class="mon-weight-num" id="weight-display">8.450</span>
+          <span class="mon-weight-unit">kg</span>
+        </div>
+        <div class="mon-weight-bar">
+          <div class="mon-weight-bar-fill" id="weight-bar" style="width: 35%;"></div>
+        </div>
+        <div class="mon-weight-limits">
+          <span>0 t</span>
+          <span>3.5t Ambang Batas</span>
+          <span>25.0 t Maks.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Dimensi & Golongan Terdeteksi -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title">
+          <span class="card__badge-num">03</span>
+          Dimensi &amp; Golongan Terdeteksi
+        </h2>
+      </div>
+      <div class="card__body">
+        <div class="mon-class-top">
+          <span class="mon-class-lbl">KLASIFIKASI TARIF</span>
+          <span class="mon-class-dims-right" id="class-dims-summary">P: 7.20 m · T: 3.20 m</span>
+        </div>
+        <div class="mon-class-name-row">
+          <span class="mon-class-code" id="class-display">GOL. V-A</span>
+          <div class="mon-class-status-right" id="class-limit-status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
+              <circle cx="12" cy="12" r="10"/><polyline points="16 10 11 15 8 12"/>
+            </svg>
+            <span>Lolos Limit</span>
+          </div>
+        </div>
+        <div class="mon-class-sub" id="class-desc">Kendaraan Barang Sedang</div>
+      </div>
+    </div>
+
+    <!-- Card 3: Penerbitan Tiket Gerbang -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title">
+          <span class="card__badge-num">04</span>
+          Penerbitan Tiket Gerbang
+        </h2>
+        <span class="badge-siap-cetak">SIAP CETAK</span>
+      </div>
+      <div class="card__body">
+        <form id="ticket-form" class="mon-ticket-form">
+          <div>
+            <label class="mon-ticket-lbl" for="driver-name">NAMA PENGEMUDI (OPSIONAL)</label>
+            <div class="mon-ticket-input-box" style="margin-top: 6px;">
+              <span class="mon-ticket-input-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+              <input
+                type="text"
+                id="driver-name"
+                name="pengemudi"
+                class="mon-ticket-input"
+                placeholder="Budi Santoso"
+                value="Budi Santoso"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+
+          <div class="mon-ticket-tariff-row">
+            <span class="mon-ticket-tariff-lbl">Total Tarif Manifest</span>
+            <span class="mon-ticket-tariff-val" id="tariff-display">Rp 642.000</span>
+          </div>
+
+          <button type="submit" class="mon-ticket-submit-btn" id="btn-issue-ticket">
+            <span>Terbitkan Tiket &amp; Buka Barrier</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+              <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Card 4: Rekomendasi LLM Real-time -->
+    <div class="card card--llm-advisory" id="mon-llm-card" style="margin-top: 14px; border: 1px solid #E9D5FF; background: #FAF5FF;">
+      <div class="card__header" style="background: #F3E8FF; border-bottom: 1px solid #E9D5FF; padding: 10px 16px;">
+        <h2 class="card__title" style="color: #6B21A8; font-size: 13px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+            <path d="M19 4v4"/><path d="M17 6h4"/>
+          </svg>
+          Rekomendasi Tindakan LLM
+        </h2>
+        <span class="sidebar__nav-badge sidebar__nav-badge--purple">Audit ODOL</span>
+      </div>
+      <div class="card__body" style="padding: 14px 16px;">
+        <div id="llm-advisory-box">
+          <p style="font-size: 12px; line-height: 1.5; color: #374151; margin-bottom: 10px;" id="llm-advisory-text">
+            <strong>Analisis Regulasi (PM 59/2022):</strong> Dimensi optik dan tonase berada dalam batas toleransi legal. Palang portal aman dibuka untuk penerbitan tiket.
+          </p>
+          <a href="/ai-assistant" class="btn btn--outline" style="width: 100%; font-size: 11.5px; padding: 7px 12px; justify-content: center; background: #ffffff; border-color: #D8B4FE; color: #6B21A8; font-weight: 600;">
+            Buka Workspace Audit LLM &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.mon-right -->
+
+</div><!-- /.mon-grid -->
+
+<div class="page-footer-info">
+  <span>Panduan Penggunaan • FERQUEUE © 2026</span>
+</div>
+
+<!-- Modal Pop-up Tiket Masuk Pelabuhan -->
+<div id="ticket-modal" class="ticket-modal-backdrop" aria-hidden="true" role="dialog" aria-labelledby="modal-ticket-title">
+  <div class="ticket-modal-card">
+    
+    <!-- Modal Close Button -->
+    <button type="button" class="ticket-modal-close" id="btn-close-ticket-modal" aria-label="Tutup tiket">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+
+    <!-- Modal Content Printable Area -->
+    <div class="ticket-receipt" id="ticket-receipt-print">
+      <!-- Receipt Header -->
+      <div class="ticket-receipt__header">
+        <div class="ticket-receipt__brand">
+          <div class="ticket-receipt__logo" id="modal-receipt-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20">
+              <circle cx="12" cy="5" r="2.5" />
+              <line x1="12" y1="7.5" x2="12" y2="21" />
+              <path d="M5 13a7 7 0 0 0 14 0" />
+              <line x1="8" y1="11" x2="16" y2="11" />
+            </svg>
+          </div>
+          <div>
+            <div class="ticket-receipt__corp">PT ASDP INDONESIA FERRY (PERSERO)</div>
+            <div class="ticket-receipt__title" id="modal-ticket-title">TIKET MANIFEST GERBANG MASUK</div>
+          </div>
+        </div>
+        <div class="ticket-receipt__loc">
+          <span>Terminal Merak • Gate Kendaraan #03</span>
+        </div>
+      </div>
+
+      <!-- Status Pill & Big Number -->
+      <div class="ticket-receipt__number-block">
+        <div class="ticket-receipt__badge" id="modal-ticket-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span id="modal-badge-text">TIKET RESMI BERLAKU</span>
+        </div>
+        <div class="ticket-receipt__number" id="modal-ticket-no">FQ-261118-001</div>
+        <div class="ticket-receipt__time" id="modal-ticket-time">18 Nov 2026, 05:15:30 WIB</div>
+      </div>
+
+      <!-- Ticket Perforated Divider with cutouts -->
+      <div class="ticket-receipt__divider">
+        <div class="ticket-receipt__cutout-left"></div>
+        <div class="ticket-receipt__dashed-line"></div>
+        <div class="ticket-receipt__cutout-right"></div>
+      </div>
+
+      <!-- Key Details Grid -->
+      <div class="ticket-receipt__details">
+        <div class="ticket-receipt__row">
+          <span class="ticket-receipt__lbl">Nama Pengemudi</span>
+          <span class="ticket-receipt__val" id="modal-driver-name">Budi Santoso</span>
+        </div>
+        <div class="ticket-receipt__row">
+          <span class="ticket-receipt__lbl">Golongan Kendaraan</span>
+          <span class="ticket-receipt__val ticket-receipt__val--bold" id="modal-vehicle-class">GOLONGAN V-A</span>
+        </div>
+        <div class="ticket-receipt__row">
+          <span class="ticket-receipt__lbl">Dimensi Terukur (P × T)</span>
+          <span class="ticket-receipt__val" id="modal-dims">7,20 m × 3,20 m</span>
+        </div>
+        <div class="ticket-receipt__row">
+          <span class="ticket-receipt__lbl">Berat Timbangan</span>
+          <span class="ticket-receipt__val ticket-receipt__val--mono" id="modal-weight">8.450 kg</span>
+        </div>
+        <div class="ticket-receipt__row">
+          <span class="ticket-receipt__lbl">Status Kepatuhan</span>
+          <span class="ticket-receipt__val ticket-receipt__val--status" id="modal-status">Normal / Lolos Limit</span>
+        </div>
+      </div>
+
+      <!-- Total Tarif Box (Hanya Muncul Jika Normal) -->
+      <div class="ticket-receipt__total-box" id="modal-total-box">
+        <div class="ticket-receipt__total-label">Total Tarif Manifest (Lunas)</div>
+        <div class="ticket-receipt__total-amount" id="modal-total-tariff">Rp 642.000</div>
+      </div>
+
+      <!-- Violation & Physical Inspection Box (Hanya Muncul Jika Melanggar) -->
+      <div class="ticket-receipt__violation-box" id="modal-violation-box" style="display: none;">
+        <div class="ticket-receipt__violation-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>INSTRUKSI PETUGAS: WAJIB INSPEKSI FISIK</span>
+        </div>
+        <div class="ticket-receipt__violation-desc" id="modal-violation-desc">
+          Kendaraan terdeteksi <strong>Over Dimension / Over Load (ODOL)</strong> melebihi ambang batas PM 59/2022. Palang gerbang <strong>DITUTUP/TERKUNCI</strong>. Pengemudi wajib membawa tiket disposisi ini ke <strong>Pos Inspeksi Fisik / U-Turn Bay Gate 03</strong> untuk pemeriksaan manual petugas lapangan.
+        </div>
+        <div class="ticket-receipt__signatures">
+          <div class="ticket-receipt__sig-box">
+            <span>Ttd. Pengemudi</span>
+            <div class="ticket-receipt__sig-line"></div>
+          </div>
+          <div class="ticket-receipt__sig-box">
+            <span>Ttd. Petugas Inspeksi Fisik</span>
+            <div class="ticket-receipt__sig-line"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barcode Visual Area -->
+      <div class="ticket-receipt__barcode-box">
+        <div class="ticket-receipt__barcode-lines" id="modal-barcode-svg">
+          <!-- Dynamically populated barcode bars -->
+        </div>
+        <div class="ticket-receipt__barcode-text" id="modal-barcode-no">*FQ-261118-001*</div>
+        <div class="ticket-receipt__footer-note" id="modal-footer-note">Simpan tiket ini untuk verifikasi kartu lambung kapal penyeberangan.</div>
+      </div>
+    </div><!-- /.ticket-receipt -->
+
+    <!-- Modal Action Buttons -->
+    <div class="ticket-modal-actions">
+      <div class="ticket-modal-actions-row">
+        <button type="button" class="btn btn--outline" id="btn-copy-ticket-no">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Salin No. Tiket</span>
+        </button>
+        <button type="button" class="btn btn--primary" id="btn-print-ticket-modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span id="btn-print-text">Cetak Tiket</span>
+        </button>
+      </div>
+
+      <!-- Tombol Kembali ke Awal / Kendaraan Berikutnya -->
+      <button type="button" class="btn btn--accent" id="btn-next-vehicle-modal" style="width: 100%; justify-content: center; gap: 6px;">
+        <span>Selesai &amp; Lanjut Kendaraan Berikutnya</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+          <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </button>
+    </div>
+
+  </div><!-- /.ticket-modal-card -->
+</div><!-- /#ticket-modal -->
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="/static/js/monitoring.js"></script>
+{% endblock %}

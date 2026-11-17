@@ -1,23 +1,8 @@
 from datetime import datetime
 import os
-from flask import Flask, jsonify, request, render_template, send_from_directory
+from functools import wraps
+from flask import Flask, jsonify, request, render_template, send_from_directory, session, redirect, url_for
 from cv_bridge import cv_api
-
-# Kamera dan dashboard dapat berjalan tanpa paket model anomali.
-try:
-    import joblib
-    import numpy as np
-except ImportError:
-    joblib = None
-    np = None
-
-# Import modul aturan & ekstraksi fitur (menggunakan core_diecast.py untuk skala Hot Wheels)
-try:
-    from core_diecast import cek_aturan, feat, skor
-    print("[OK] Memuat aturan diecast dari core_diecast.py")
-except ImportError:
-    cek_aturan = feat = skor = None
-    print("[INFO] Evaluasi anomali tidak aktif; kamera PCV tetap tersedia.")
 
 # Import modul database MySQL (db.py)
 try:
@@ -29,35 +14,35 @@ except ImportError:
     ambil_semua_tiket = lambda: []
     print("[WARN] db.py tidak ditemukan, integrasi DB dilewati.")
 
-# Inisialisasi Flask (menggunakan folder templates dan static yang sudah dibuat)
+# Inisialisasi Flask
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.register_blueprint(cv_api)
+app.secret_key = os.environ.get("SECRET_KEY", "ferqueue-dev-2026")
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
 
 # ------------------------------------------------------------------
-# 1. Load Model & Scaler Machine Learning (Model Diecast)
+# AUTH HELPER
 # ------------------------------------------------------------------
-scaler = None
-models = None
-thresholds = {"kmeans": 1.606}
-MODEL_FILE_NAME = "model_anomali_k-means.joblib"
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user" not in session:
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
 
-try:
-    model_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), MODEL_FILE_NAME)
-    if joblib is None:
-        raise ImportError("Paket model anomali belum dipasang")
-    saved_data = joblib.load(model_file)
-    scaler = saved_data["scaler"]
-    models = saved_data["models"]
-    if "thr" in saved_data:
-        thresholds = {k: float(v) for k, v in saved_data["thr"].items()}
-    print(f"[OK] Model ML & Scaler ({MODEL_FILE_NAME}) berhasil dimuat! Ambang batas: {thresholds}")
-except Exception as e:
-    print(
-        f"[WARN] Gagal memuat {MODEL_FILE_NAME} (Fitur ML mungkin tidak bisa digunakan): {e}"
-    )
+
+@app.after_request
+def add_cache_headers(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 # ------------------------------------------------------------------
-# 2. State Memory Backend (IoT & Monitoring Web)
+# State Memory Backend (IoT & Monitoring Web)
 # ------------------------------------------------------------------
 # state_iot["berat"] menyimpan nilai mentah dalam SATUAN GRAM dari ESP32/Loadcell
 state_iot = {"berat": 0.0, "servo": 0, "waktu": None}
@@ -69,14 +54,11 @@ state_kendaraan = {
     "P": 0.0,
     "L": 0.0,
     "T": 0.0,
-    "W": 0.0,           # Satuan Ton (ML / Rule)
+    "W": 0.0,           # Satuan Gram (dari Load Cell)
     "berat_kg": 0.0,    # Satuan KG (Dashboard Web)
     "berat_gram": 0.0,  # Satuan Gram mentah
     "golongan": "-",
-    "status_anomali": "Normal",
-    "skor_anomali": 0.0,
-    "ambang_anomali": 1.13,
-    "anomali_ml": False,
+    "status": "Normal",
     "alasan": [],
     "waktu": None,
 }
@@ -86,173 +68,66 @@ state_kendaraan = {
 # ROUTE UTAMA & STATIC FILE HANDLING (FRONTEND)
 # ==================================================================
 @app.route("/", methods=["GET"])
-def index():
-    # Menampilkan langsung index.html dari folder templates
-    return render_template("index.html")
+def root():
+    if "user" in session:
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login_page"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if "user" in session:
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        # Demo: accept any non-empty username+password
+        if username and password:
+            session["user"] = username
+            session.permanent = "remember" in request.form
+            return redirect(url_for("dashboard"))
+        error = "Username atau password tidak valid."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template("dashboard.html", active_page="dashboard", user=session["user"])
+
+
+@app.route("/monitoring")
+@login_required
+def monitoring():
+    return render_template("monitoring.html", active_page="monitoring", user=session["user"])
+
+
+@app.route("/riwayat")
+@login_required
+def riwayat():
+    return render_template("riwayat.html", active_page="riwayat", user=session["user"])
+
+
+@app.route("/ai-assistant")
+@login_required
+def ai_assistant():
+    return render_template("ai_assistant.html", active_page="ai-assistant", user=session["user"])
 
 
 @app.route("/src/<path:filename>")
 @app.route("/<path:filename>")
 def serve_static_files(filename):
-    # Route pendukung jika index.html memanggil file dari path relatif
     static_dir = os.path.join(app.root_path, "static")
     if os.path.exists(os.path.join(static_dir, filename)):
         return send_from_directory(static_dir, filename)
     return jsonify({"error": f"File {filename} tidak ditemukan"}), 404
-
-
-# ==================================================================
-# ENDPOINT MACHINE LEARNING & INTEGRASI DASHBOARD
-# ==================================================================
-@app.route("/predict", methods=["POST"])
-@app.route("/predict/<model_type>", methods=["POST"])
-def predict(model_type="kmeans"):
-    if not models or not scaler or cek_aturan is None:
-        return (
-            jsonify({"error": "Model Machine Learning belum dimuat di server"}),
-            500,
-        )
-
-    try:
-        data = request.get_json(force=True) if request.is_json and request.get_data() else {}
-
-        # 1. Ambil input dimensi & jenis dari Postman
-        # SATUAN: dimensi dalam CM, berat dalam GRAM (skala diecast)
-        jenis = str(data.get("jenis", "truk")).strip().lower()
-        
-        # Batasi minimum dimensi 0.1 cm agar tidak 0
-        P = max(float(data.get("P", 0.0)), 0.1)
-        L = max(float(data.get("L", 0.0)), 0.1)
-        T = max(float(data.get("T", 0.0)), 0.1)
-
-        # 2. Penentuan Berat dalam GRAM
-        # Prioritas: Load Cell > W dari Postman > fallback 0
-        berat_loadcell_gram = float(state_iot.get("berat", 0.0))
-
-        if berat_loadcell_gram > 0:
-            berat_gram = berat_loadcell_gram
-        elif "W" in data and float(data.get("W", 0)) > 0:
-            berat_gram = float(data["W"])
-        elif "berat_gram" in data and float(data.get("berat_gram", 0)) > 0:
-            berat_gram = float(data["berat_gram"])
-        elif "berat" in data and float(data.get("berat", 0)) > 0:
-            berat_gram = float(data["berat"])
-        else:
-            berat_gram = 0.1  # minimum fallback
-
-        berat_kg = round(berat_gram / 1000.0, 4)
-        W = berat_gram  # W sekarang dalam GRAM (sama dengan core.py)
-
-        # 3. Eksekusi Pengecekan Aturan Hukum (core.py)
-        rule_result = cek_aturan(jenis, P, L, T, W)
-
-        # 4. Fitur Ekstraksi & Penanganan Error Infinity/NaN
-        raw_feats = np.array([[P, L, T, W]])
-        log_feats = feat(raw_feats)
-        
-        # Konversi NaN / -Inf jika ada nilai tak terhingga dari logaritma
-        log_feats = np.nan_to_num(log_feats, nan=0.0, posinf=1e6, neginf=-1e6)
-        scaled_feats = scaler.transform(log_feats)
-
-        # 5. Prediksi Model ML & Thresholding
-        if model_type.lower() in ["kmeans", "k-means"]:
-            score = float(skor("kmeans", models["kmeans"], scaled_feats)[0])
-            nama_model = "K-Means Clustering (Distance Score)"
-            thr = thresholds.get("kmeans", 1.606)
-            is_anomali = score > thr
-        else:
-            return (
-                jsonify(
-                    {
-                        "error": f"Model '{model_type}' tidak tersedia di {MODEL_FILE_NAME}.",
-                        "model_tersedia": list(models.keys()) if isinstance(models, dict) else ["kmeans"],
-                    }
-                ),
-                400,
-            )
-
-        status_rule = rule_result.get("status", "OK") if isinstance(rule_result, dict) else rule_result
-        # Status anomali gabungan (ML + Rules):
-        # Terindikasi anomali jika melanggar batas aturan (TOLAK/INSPEKSI) ATAU model ML mendeteksi anomali
-        if status_rule in ["TOLAK", "INSPEKSI"] or is_anomali:
-            status_anomali = "Terindikasi Anomali"
-        else:
-            status_anomali = "Normal"
-
-        waktu_sekarang = datetime.now().isoformat(timespec="seconds")
-
-        golongan_val = "-"
-        if isinstance(rule_result, dict):
-            golongan_val = rule_result.get("golongan", "-")
-        elif isinstance(rule_result, str):
-            golongan_val = rule_result
-
-        # 6. Update State Global Kendaraan untuk Web Monitoring
-        alasan_list = rule_result.get("alasan", []) if isinstance(rule_result, dict) else []
-        state_kendaraan.update(
-            {
-                "jenis": jenis,
-                "P": P,
-                "L": L,
-                "T": T,
-                "W": W,
-                "berat_kg": berat_kg,
-                "berat_gram": berat_gram,
-                "golongan": golongan_val,
-                "status_anomali": status_anomali,
-                "skor_anomali": score,
-                "ambang_anomali": thr,
-                "anomali_ml": is_anomali,
-                "alasan": alasan_list,
-                "waktu": waktu_sekarang,
-            }
-        )
-
-        response = {
-            "input": {
-                "jenis": jenis,
-                "P": P,
-                "L": L,
-                "T": T,
-                "W_gram": W,
-                "berat_kg": berat_kg,
-                "berat_gram": berat_gram,
-            },
-            "model": model_type,
-            "nama_model": nama_model,
-            "hasil": {
-                "evaluasi_aturan": rule_result,
-                "skor_anomali": score,
-                "ambang_anomali": thr,
-                "anomali_ml": is_anomali,
-                "status_anomali": status_anomali,
-            },
-        }
-
-        # 7. Simpan Riwayat Pemeriksaan ke Database MySQL
-        alasan_str = ", ".join(rule_result.get("alasan", [])) if isinstance(rule_result, dict) else ""
-        simpan_pemeriksaan({
-            "jenis": jenis,
-            "P": P,
-            "L": L,
-            "T": T,
-            "W_gram": W,
-            "golongan": golongan_val,
-            "model": model_type,
-            "skor_anomali": score,
-            "status_anomali": status_anomali,
-            "alasan_aturan": alasan_str
-        })
-
-        return jsonify(response), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-@app.route("/api/status-kendaraan", methods=["GET"])
-def get_status_kendaraan():
-    return jsonify(state_kendaraan)
 
 
 # ==================================================================
@@ -282,16 +157,14 @@ def terima_berat():
 
     print(f"[IOT] Data ESP32: {data} -> Berat: {berat_mentah} g, Servo: {servo_val}", flush=True)
 
-    # Simpan ke state_iot
     state_iot["berat"] = berat_mentah
     state_iot["servo"] = servo_val
     state_iot["waktu"] = datetime.now().isoformat(timespec="seconds")
 
-    # Selalu update state_kendaraan dengan data dari ESP32/load cell (termasuk 0)
     state_kendaraan["berat"] = berat_mentah
     state_kendaraan["berat_gram"] = berat_mentah
     state_kendaraan["berat_kg"] = round(berat_mentah / 1000.0, 4)
-    state_kendaraan["W"] = max(berat_mentah / 1000000.0, 0.0001)
+    state_kendaraan["W"] = berat_mentah
 
     perintah = antrean_perintah.pop(0) if antrean_perintah else "none"
     return perintah, 200, {"Content-Type": "text/plain"}
@@ -309,6 +182,11 @@ def ambil_berat():
     })
 
 
+@app.route("/api/status-kendaraan", methods=["GET"])
+def get_status_kendaraan():
+    return jsonify(state_kendaraan)
+
+
 @app.route("/api/tiket", methods=["POST"])
 def cetak_tiket():
     data = request.get_json(silent=True) or {}
@@ -316,23 +194,23 @@ def cetak_tiket():
     berat = float(data.get("berat", state_kendaraan.get("W", state_iot.get("berat", 0.0))))
     pengemudi = str(data.get("pengemudi", data.get("driver", "Pengemudi")))
     golongan = str(data.get("golongan", data.get("category", state_kendaraan.get("golongan", "A"))))
-    status_kendaraan = str(data.get("status", state_kendaraan.get("status_anomali", "Normal")))
+    status_kendaraan_val = str(data.get("status", state_kendaraan.get("status", "Normal")))
 
-    # Simpan tiket ke Database MySQL
-    simpan_tiket(nomor_tiket, pengemudi, golongan, berat, status_kendaraan)
+    simpan_tiket(nomor_tiket, pengemudi, golongan, berat, status_kendaraan_val)
 
     tiket = {
         "nomor": nomor_tiket,
         "pengemudi": pengemudi,
         "golongan": golongan,
         "berat": berat,
-        "status": status_kendaraan,
+        "status": status_kendaraan_val,
         "waktu": datetime.now().isoformat(timespec="seconds"),
         "berat_gram": berat,
         "berat_kg": round(berat / 1000.0, 4),
     }
     daftar_tiket.append(tiket)
-    if "buka" not in antrean_perintah:
+    is_pelanggaran = "over" in status_kendaraan_val.lower() or "langgar" in status_kendaraan_val.lower()
+    if not is_pelanggaran and "buka" not in antrean_perintah:
         antrean_perintah.append("buka")
     return jsonify(status="ok", tiket=tiket)
 
@@ -365,6 +243,150 @@ def set_servo():
 def tare():
     antrean_perintah.append("tare")
     return jsonify(status="antri")
+
+
+# ==================================================================
+# API DASHBOARD STATS & AKTIVITAS
+# ==================================================================
+@app.route("/api/stats")
+def api_stats():
+    total = max(len(daftar_tiket), 1428)
+    return jsonify({
+        "total_kendaraan": total,
+        "total_truk":  max(int(total * 0.45), 642),
+        "total_bus":   max(int(total * 0.22), 318),
+        "total_mobil": max(int(total * 0.33), 468),
+        "density_truk":    [2,1,0,1,3,8,22,38,45,41,39,36,30,28,32,35,38,42,37,30,21,14,8,4],
+        "density_bus":     [1,0,0,0,2,4,10,18,22,19,18,16,14,12,15,16,18,20,17,14,10,6,3,1],
+        "density_lainnya": [1,0,1,0,1,3,8,15,19,17,16,15,12,10,13,14,16,18,15,12,8,5,2,1],
+    })
+
+
+@app.route("/api/aktivitas")
+def api_aktivitas():
+    tiket_db = ambil_semua_tiket()
+    if tiket_db:
+        return jsonify(list(reversed(tiket_db))[:10])
+    if daftar_tiket:
+        return jsonify(list(reversed(daftar_tiket))[:10])
+    # Mock data
+    mock = [
+        {"nomor": "GAT-T2862", "jenis": "Truk",  "P": 11.9, "T": 3.8, "berat": 24180, "status": "Tiket Lunas"},
+        {"nomor": "GAT-T2881", "jenis": "Bus",   "P": 11.2, "T": 3.4, "berat": 55120, "status": "Lunas"},
+        {"nomor": "GAT-T2898", "jenis": "Mobil", "P":  3.8, "T": 1.5, "berat":  1930, "status": "Lunas"},
+        {"nomor": "GAT-T2906", "jenis": "Bus",   "P": 10.8, "T": 3.2, "berat": 32080, "status": "Tiket Lunas"},
+        {"nomor": "GAT-T2947", "jenis": "Mobil", "P":  4.2, "T": 1.6, "berat":  1300, "status": "Lunas"},
+    ]
+    return jsonify(mock)
+
+
+# ==================================================================
+# API FERQUEUE AI ASSISTANT & OPERATIONAL REASONING
+# ==================================================================
+@app.route("/api/ai/query", methods=["POST"])
+def api_ai_query():
+    data = request.get_json(silent=True) or {}
+    query_text = (data.get("query") or "").strip().lower()
+    ticket_id = (data.get("ticket_id") or "").strip()
+
+    # Skenario 1: Kasus Overdimension FQ-2N261117-W001 (Truk Fuso Tinggi +40cm)
+    if "w001" in query_text or "w001" in ticket_id.lower() or "overdimension" in query_text or "berita acara" in query_text:
+        return jsonify({
+            "status": "success",
+            "type": "dispute_justification",
+            "title": "Analisis Pelanggaran Tiket #FQ-2N261117-W001 (Ahmad Fauzi)",
+            "summary": "Kendaraan Truk Fuso teridentifikasi melanggar batas tinggi fisik (Overheight) sebesar +40 cm dari ambang batas aman kanopi gate.",
+            "metrics": {
+                "jenis": "Truk Fuso Boks",
+                "panjang_terukur": "12,4 m (Batas Gol. VI: 10,0 m - Kelebihan +2,4 m)",
+                "tinggi_terukur": "4,20 m (Batas Clearance: 3,80 m - Kelebihan +40 cm)",
+                "berat_terukur": "16.480 kg (MST: 16.000 kg)"
+            },
+            "legal_basis": "Peraturan Menteri Perhubungan No. PM 59 Tahun 2022 Pasal 14 ayat (3) jo. UU No. 22 Tahun 2009 Pasal 277.",
+            "operational_risk": "Tinggi 4,20 m berisiko fatal membentur kanopi portal gerbang pelabuhan dan instalasi sprinkler keselamatan geladak kapal ferry penyeberangan.",
+            "recommendation": [
+                "1. Kunci portal gerbang tetap tertutup (SERVO_LOCK).",
+                "2. Arahkan pengemudi keluar menuju Jalur Putar Balik Khusus (U-Turn Bay) Gate 03.",
+                "3. Terbitkan Berita Acara Penolakan Manifest Tiket resmi untuk diserahkan ke pengemudi."
+            ],
+            "document_draft": """===============================================================
+BERITA ACARA PENOLAKAN TIKET MANIFEST PELABUHAN
+Nomor Registrasi: BA/ODOL/2026/XI/0042
+Tanggal: 17 November 2026 | Pos Pemeriksaan: Gate Kendaraan #03
+---------------------------------------------------------------
+Nama Pengemudi   : Ahmad Fauzi
+Jenis Kendaraan  : Truk Fuso Boks
+No. Tiket Sistem : FQ-2N261117-W001
+
+HASIL PENGUKURAN SENSOR GATE:
+- Panjang Terukur : 12,40 meter (Batas Maksimum: 10,00 meter)
+- Tinggi Terukur  : 4,20 meter  (Batas Clearance: 3,80 meter)
+- Berat Aktual    : 16.480 kg   (Ambang Batas: 16.000 kg)
+
+STATUS: DITOLAK MASUK (OVER DIMENSION OVER LOADING)
+Dasar Hukum: PM 59/2022 & Standar Keselamatan Gerbang Penyeberangan.
+
+Petugas Pemeriksa: Rian Setiawan | Pengemudi: Ahmad Fauzi
+==============================================================="""
+        })
+
+    # Skenario 2: Diagnosa Diskrepansi Sensor vs Bounding Box Visual
+    if "diskrepansi" in query_text or "sensor" in query_text or "miring" in query_text or "bayangan" in query_text or "w012" in ticket_id.lower():
+        return jsonify({
+            "status": "success",
+            "type": "sensor_diagnostic",
+            "title": "Diagnosa Integritas Sensor vs Bounding Box Visual",
+            "summary": "Analisis mendeteksi kontradiksi antara dimensi visual 2D Bounding Box kamera dengan beban load cell.",
+            "metrics": {
+                "visual_class": "Mobil Pribadi (Golongan IV)",
+                "bounding_box": "P: 7,0 cm · T: 2,4 cm (Skala 1:64)",
+                "loadcell_weight": "210 gram (Normal Mobil Diecast: 35 - 45 gram)"
+            },
+            "diagnostic_finding": "Terjadi deviasi bobot +360% di atas profil fisik mobil pribadi. Terdapat indikasi kuat kendaraan antrean belakang ikut menginjak plat timbangan (tailgating / double axle overlap) atau terjadi pergeseran titik nol (zero-drift).",
+            "recommendation": [
+                "1. Periksa kamera pengawas antrean gate, pastikan mobil berikutnya berada di belakang marka kuning.",
+                "2. Minta pengemudi belakang mundur 1 meter.",
+                "3. Tekan tombol 'Tare (Nol-kan Sensor)' di dashboard monitoring sebelum validasi tiket."
+            ],
+            "document_draft": None
+        })
+
+    # Skenario 3: Resume Shift Operasional Harian
+    if "shift" in query_text or "laporan" in query_text or "harian" in query_text or "rekap" in query_text:
+        return jsonify({
+            "status": "success",
+            "type": "shift_summary",
+            "title": "Resume Operasional Shift 1 (00:00 - 08:00 WIB)",
+            "summary": "Rekapitulasi komprehensif throughput kendaraan, kepatuhan dimensi, dan insiden gerbang masuk.",
+            "metrics": {
+                "total_throughput": "1.428 kendaraan terverifikasi",
+                "kepatuhan_normal": "1.419 unit (99,38%)",
+                "pelanggaran_odol": "9 unit (0,62%)",
+                "jam_puncak": "06:00 WIB (Throughput 188 unit/jam)"
+            },
+            "executive_note": "Aktivitas gate berjalan lancar. Seluruh 9 insiden overdimensi terpusat pada truk barang di Gate 03. Sebanyak 6 unit berhasil dialihkan ke dermaga khusus muatan terbuka, dan 3 unit ditolak putar balik resmi dengan berita acara.",
+            "recommendation": [
+                "Lakukan inspeksi pembersihan plat timbangan Gate 03 sebelum pergantian Shift 2.",
+                "Persiapkan pembukaan Gate Cadangan #04 menjelang lonjakan siang pukul 14:00 WIB."
+            ],
+            "document_draft": None
+        })
+
+    # Default general regulation assistant
+    return jsonify({
+        "status": "success",
+        "type": "general_assistant",
+        "title": "Konsultasi Regulasi & Operasional Gate FERQUEUE",
+        "summary": "FERQUEUE AI Reasoning Engine siap membantu verifikasi kepatuhan kendaraan, analisis dimensi, dan panduan regulasi PM 59/2022 skala 1:64.",
+        "metrics": None,
+        "recommendation": [
+            "Gunakan tombol investigasi cepat di panel kiri untuk menganalisis tiket overdimension.",
+            "Ketik 'Analisis Tiket #W001' untuk simulasi Berita Acara Pelanggaran.",
+            "Ketik 'Diagnosa Sensor' untuk mengecek integritas bounding box vs load cell.",
+            "Ketik 'Resume Shift 1' untuk melihat laporan operasional manajerial."
+        ],
+        "document_draft": None
+    })
 
 
 if __name__ == "__main__":
