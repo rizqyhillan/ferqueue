@@ -1,175 +1,56 @@
-# PCV: dataset, training, dan prediksi gambar
+# PCV FERQUEUE
 
-Model: **SSD MobileNet V2 FPNLite 320×320**. Dataset: gambar + anotasi YOLO dari LabelImg atau COCO JSON yang sudah dibagi train/test. Kamera tidak diperlukan. Branch `igpu` menjalankan training di CPU laptop Ryzen pada Linux native. Radeon iGPU tidak dipakai oleh backend TensorFlow ini. [Training lokal](../../docs/TRAINING_LOCAL.md); [NVIDIA WSL2 opsional](../../docs/TRAINING_GPU_WINDOWS.md).
+Mulai dari **[panduan PCV manual](../../docs/PCV_MANUAL.md)** untuk instalasi, dataset, konversi, segmentasi, training, dan web. Seluruh perintah dijalankan dari root FERQUEUE menggunakan `python pcv.py <tahap>` dengan environment Python yang kamu aktifkan sendiri.
 
-## Dataset yang diterima
-
-Susunan flat hasil LabelImg:
+## Struktur
 
 ```text
-data/raw/vehicles/
-  classes.txt
-  mobil-001.jpg
-  mobil-001.txt
-  truk-001.jpg
-  truk-001.txt
+apps/computer-vision/
+  configs/
+    yolo.json                 # Data raw dan pembagian train/test
+    coco.json                 # Training, evaluasi, prediksi, dan API
+  requirements/
+    data.txt                  # Gambar, preprocessing, converter eksternal
+    training.txt              # TensorFlow CPU dan Object Detection API
+    training-cuda.txt         # Tambahan NVIDIA
+    inference.txt             # Prediksi dan API tanpa sumber training
+  src/ferqueue_cv/             # Modul tahapan PCV
+  tests/                      # Pengujian dengan data buatan
 ```
 
-Atau gambar/label terpisah dengan subfolder yang sama:
+`docs/PCV_MANUAL.md` menjadi panduan utama. Catatan eksperimen terdahulu tersimpan di `docs/PCV_EXPERIMENTS.md`.
+
+## Perintah
+
+| Tahap | Kegunaan |
+| --- | --- |
+| `inspect` | Memeriksa sumber YOLO/COCO dan ringkasan data |
+| `stage-yolo` | Menyiapkan gambar/label dan daftar train/test converter |
+| `adopt-coco` | Menghubungkan JSON converter ke gambar raw |
+| `prepare` | Membekukan manifest kelas, split, dan hash sumber |
+| `segment`, `preview` | Review mask GrabCut dan pengolahan citra |
+| `plan`, `build-records` | Anggaran epoch/langkah dan TFRecord |
+| `train`, `export`, `evaluate` | Training TensorFlow, SavedModel, dan metrik test |
+| `predict` | Prediksi file gambar dan penyimpanan bbox/JSON |
+| `serve` | API kamera untuk Flask pada port 8000 |
+| `package-model`, `import-model` | Membagikan model dan preprocessing |
+| `fix-tf-slim`, `check`, `check-inference` | Kompatibilitas dan pemeriksaan environment |
+| `diagnose` | Memeriksa checkpoint dan model ekspor |
+| `clean-dataset` | Audit/karantina dataset setelah review operator |
+| `test` | Menjalankan pengujian kode tanpa training dataset pengguna |
+
+Untuk data YOLO gunakan `--config apps/computer-vision/configs/yolo.json`. Setelah konversi gunakan `--config apps/computer-vision/configs/coco.json`; config COCO ini juga menjadi default. Semua path di dalam config tetap relatif terhadap root repo.
+
+Konversi memakai [Taeyoung96/Yolo-to-COCO-format-converter](https://github.com/Taeyoung96/Yolo-to-COCO-format-converter), yang dijalankan manual lewat `main.py`. Helper FERQUEUE menyiapkan input dan menyesuaikan path hasilnya; bbox tetap berasal dari converter.
+
+Model: SSD MobileNet V2 FPNLite 320×320, TensorFlow 2.15.1, Python 3.11. Hanya ada **train 70% dan test 30% berdasarkan kelompok/sesi**. Tidak ada split validasi. Model memprediksi kelas dan bounding box; mask GrabCut untuk review, dan dimensi fisik memerlukan kalibrasi terpisah.
+
+Preprocessing mengikuti metadata model pada evaluasi, prediksi, serta web. Confidence/NMS tampilan mengikuti config yang dipilih. [Tabel parameter](../../docs/PCV_MANUAL.md#13-bagian-yang-bisa-diubah-dan-pengaruhnya) menjelaskan pengaruh dan tahap yang perlu diulang.
+
+Untuk tes, setelah dependensi terpasang:
 
 ```text
-data/raw/vehicles/
-  classes.txt
-  images/rekaman-01/frame-001.jpg
-  labels/rekaman-01/frame-001.txt
-  images/rekaman-02/frame-001.jpg
-  labels/rekaman-02/frame-001.txt
+python pcv.py test
 ```
 
-`classes.txt` berisi daftar kelas asli saat labeling, satu nama per baris. Jangan mengubah urutannya. Semua salinan `classes.txt` dalam subfolder harus memiliki urutan identik.
-
-Baris label YOLO: `class_id center_x center_y width height`, dengan koordinat dinormalisasi 0–1 dan ID mulai dari 0. Konverter mengubah ID menjadi mulai dari 1 untuk TensorFlow; tidak perlu labeling ulang. Format YOLO merupakan format anotasi, bukan kewajiban memakai model YOLO.
-
-Setiap gambar JPG/JPEG/PNG harus punya label `.txt`. Gambar background menggunakan label kosong yang dibuat sengaja. Label hilang, kotak tidak valid, ID kelas salah, file rusak, gambar duplikat, serta label tanpa pasangan gambar ditolak. Normalisasi rotasi EXIF sebelum labeling, bukan setelah kotak dibuat.
-
-Jika `prepare` menemukan banyak file tanpa pasangan atau duplikat, jalankan `bash scripts/cv.sh clean-dataset` (Windows: `.\scripts\cv.ps1 clean-dataset`). Perintah ini membuat laporan lengkap dan menunggu input `y` setelah kamu review sebelum memindahkan kandidat ke karantina. Opsi `--dry-run` (PowerShell: `-DryRun`) hanya membuat laporan. Gambar identik dengan anotasi bertentangan tetap disimpan untuk diperiksa; label yang isinya sama pada gambar berbeda tidak dihapus. [Alur review, backup, dan pemulihan](../../scripts/README.md#review-dan-bersihkan-dataset-sebelum-prepare).
-
-## Sumber training COCO JSON
-
-COCO JSON dapat dipakai langsung sebagai sumber anotasi dengan `configs/training-coco.json`. Alurnya adalah **gambar + COCO JSON → manifest → TFRecord → training SSD MobileNet V2**. Bobot pretrained COCO dan format anotasi COCO merupakan hal yang terpisah; label YOLO juga tetap didukung oleh konfigurasi lama.
-
-Susunan untuk hasil konversi dataset saat ini:
-
-```text
-data/raw/vehicles/                         # Gambar asli
-data/processed/vehicles-coco/annotations/
-  instances_train.json
-  instances_test.json
-```
-
-Pada konfigurasi COCO, `dataset_dir` adalah folder akar gambar. `file_name` dalam setiap entri `images` harus relatif terhadap folder itu. Anotasi harus berisi `images`, `annotations`, dan `categories`; `bbox` menggunakan `[x, y, width, height]` dalam piksel. Label `.txt` dan `classes.txt` tidak dibaca pada alur COCO. Kategori train/test harus memiliki pemetaan ID dan nama yang sama; urutan daftar boleh berbeda. ID kategori diurutkan numerik lalu dipetakan ke ID model berurutan mulai dari 1, termasuk jika ID sumber tidak berurutan.
-
-Jalankan dari root repo:
-
-```bash
-# Sekali saja untuk membekukan sumber dan split COCO:
-bash scripts/cv.sh prepare --config configs/training-coco.json
-# Training CPU 3.000 langkah di run terpisah:
-bash scripts/cv.sh train --config configs/training-coco.json
-bash scripts/cv.sh export --config configs/training-coco.json
-bash scripts/cv.sh evaluate --config configs/training-coco.json --split test
-```
-
-Di Windows, persiapan dataset menggunakan `.\scripts\cv.ps1 prepare -Config configs/training-coco.json`. Semua perintah sesudahnya, termasuk prediksi atau pengemasan, juga perlu memakai konfigurasi COCO agar memilih run yang sesuai.
-
-Manifest dibuat di `data/processed/vehicles-coco-v1/` dan training di `models/mobilenet/runs/ssd-v2-coco-001/`. Konfigurasi dan run YOLO lama tidak diganti. Split pada kedua JSON dipertahankan persis; `seed`, `train_ratio`, dan `test_ratio` tidak membagi ulang data COCO. Konversi format tidak memperbaiki kebocoran sumber gambar atau pembagian yang sudah ada.
-
-Importer memeriksa keberadaan dan resolusi gambar, orientasi EXIF, kategori, ID/referensi anotasi, serta kotak yang finite dan berada dalam gambar. Gambar berulang atau identik secara byte ditolak, termasuk antar-split. Gambar tanpa anotasi dipertahankan sebagai background. Anotasi `iscrowd`/`ignore` belum didukung dan ditolak agar tidak berubah menjadi target biasa secara diam-diam; segmentasi tidak digunakan oleh model bbox ini. `clean-dataset` hanya berlaku untuk alur YOLO.
-
-Hash kedua JSON dan gambar dibekukan saat prepare. Jika anotasi atau gambar diubah, gunakan `prepared_dir` dan `run_dir` baru lalu prepare lagi. Converter eksternal dapat membulatkan koordinat menjadi piksel integer; importer memakai nilai bbox dalam JSON tersebut sebagai sumber, bukan mengambil ulang kotak YOLO.
-
-## Pembagian kelompok dan data uji
-
-Untuk frame video atau foto satu kendaraan dalam sesi yang sama, simpan dalam subfolder tingkat pertama yang sama. Kelompok itu tidak akan tersebar antara train dan test.
-
-Jika hasil LabelImg masih flat, tambahkan `groups.csv`:
-
-```csv
-image,group
-frame-001.jpg,rekaman-01
-frame-002.jpg,rekaman-01
-frame-100.jpg,rekaman-02
-```
-
-Nama gambar relatif terhadap folder `images/` bila ada; jika tidak, relatif terhadap `data/raw/vehicles/`. Tanpa folder/CSV, setiap gambar flat dianggap independen. Script tidak dapat mengetahui sendiri apakah dua foto menampilkan kendaraan yang sama.
-
-Perlu minimal dua kelompok independen untuk membuat split train/test, tetapi jumlah itu saja belum cukup untuk menilai kualitas model. Konfigurasi saat ini sekitar 70% train dan 30% test berdasarkan kelompok; jumlah gambar bisa berbeda karena ukuran kelompok tidak sama.
-
-## Validasi ringan di Windows
-
-```powershell
-.\scripts\cv.ps1 setup-data
-.\scripts\cv.ps1 prepare
-.\scripts\cv.ps1 test
-```
-
-Hanya Pillow yang dipasang di `.venv-data`. `prepare` menulis manifest JSON serta `summary.json` ke `data/processed/vehicles-v1/`; TFRecord train dan test baru dibuat saat training. Jika suatu kelas tidak ada di training, prepare berhenti. Kelas yang hilang dari test ditulis sebagai peringatan.
-
-Manifest tidak ditimpa. Gunakan `prepared_dir` baru untuk versi dataset baru, termasuk jika label diperbaiki. Jika sebelumnya memakai manifest tiga bagian, gunakan `prepared_dir` dan `run_dir` baru lalu jalankan prepare; format lama akan ditolak agar tidak tercampur. Bawa dataset asli dan folder manifest ke laptop training dengan path relatif yang sama. Jangan membagikan `.venv-*` atau `.cache`.
-
-## Konfigurasi
-
-Edit `configs/training.json`:
-
-| Kunci | Nilai awal | Kegunaan |
-| --- | --- | --- |
-| `dataset_dir` | `data/raw/vehicles` | Dataset asli |
-| `prepared_dir` | `data/processed/vehicles-v1` | Manifest pembagian |
-| `run_dir` | `models/mobilenet/runs/ssd-v2-igpu-001` | Satu eksperimen/model |
-| `train_ratio` | 0.7 | Proporsi kelompok training |
-| `test_ratio` | 0.3 | Proporsi kelompok test; jumlah kedua rasio harus 1 |
-| `batch_size` | 4 | Gambar per langkah |
-| `num_steps` | 3000 | Jumlah langkah, bukan epoch |
-| `learning_rate` | 0.004 | Nilai awal fine-tuning |
-| `seed` | 42 | Pembagian kelompok, bukan jaminan determinisme training GPU |
-| `confidence_threshold` | 0.5 | Ambang tampilan prediksi |
-
-## Training di laptop sendiri
-
-Dari root repo dalam Linux native:
-
-```bash
-bash scripts/cv.sh setup
-bash scripts/cv.sh check
-# Bila belum ada manifest:
-bash scripts/cv.sh prepare
-bash scripts/cv.sh train
-bash scripts/cv.sh export
-bash scripts/cv.sh evaluate --split test
-```
-
-Transfer learning memakai checkpoint COCO resmi. Script membuat TFRecord, label map, serta pipeline sesuai jumlah kelas. Batch normalization dibekukan untuk batch kecil; optimizer momentum menggunakan cosine decay dan warmup. Versi TensorFlow/Keras, sumber Object Detection API, dan compiler protobuf dipatok pada setup.
-
-Artefak dalam `run_dir`: `inputs.json` (config + manifest), `label_map.pbtxt`, `pipeline.config`, `records/`, `training/`, `exports/`, `export.json`, dan `reports/`.
-
-Checkpoint disimpan setiap 100 langkah. Ulangi `train` dengan config/manifest sama untuk resume. Jangan menjalankan dua training pada run yang sama. Parameter/dataset berbeda memerlukan `run_dir` baru. Bila split tetap, jangan membuat ulang pembagian untuk setiap eksperimen.
-
-Untuk NVIDIA, setup memakai `--device cuda` dan perintah check/train memakai `--require-gpu`.
-
-## Evaluasi
-
-Evaluasi COCO berjalan satu kali pada split test berlabel. Laporan `reports/ckpt-N-test.json` mencakup mAP IoU 0.50:0.95, AP@0.50, average recall, dan metrik per kelas. Ambang tampilan `confidence_threshold` tidak menyaring evaluasi COCO. Nilai `-1` berarti kategori/rentang itu tidak dapat dievaluasi.
-
-Tetapkan parameter training sebelum mengevaluasi data test sebagai pengujian akhir. Jalankan `bash scripts/cv.sh evaluate` atau `bash scripts/cv.sh evaluate --split test`. `export` memakai checkpoint terbaru, bukan otomatis checkpoint terbaik. Setelah melanjutkan training, jalankan export lagi sebelum evaluasi/prediksi.
-
-## Membagikan model dan prediksi Windows
-
-Laptop training:
-
-```bash
-bash scripts/cv.sh package-model --archive outputs/ssd-model.zip
-```
-
-Anggota tim menerima ZIP itu di `outputs/ssd-model.zip`:
-
-```powershell
-.\scripts\cv.ps1 setup-data
-.\scripts\cv.ps1 import-model -Archive outputs/ssd-model.zip
-.\scripts\cv.ps1 setup-inference
-.\scripts\cv.ps1 check
-.\scripts\cv.ps1 predict -Images data/inference -Output outputs/predictions
-```
-
-Prediksi CPU memakai `.venv-inference` berisi TensorFlow, NumPy, dan Pillow; tidak memasang CUDA atau sumber training. Pilih `run_dir` baru sebelum impor jika sudah ada model/training di sana. ZIP hanya berisi SavedModel dan metadata kelas; belum mencakup API/web.
-
-Gambar baru tidak perlu label untuk melihat hasil deteksi. Hasil `foto.jpg.predicted.jpg` menampilkan kotak, kelas, dan confidence. File `foto.jpg.predicted.json` berisi koordinat `[xmin, ymin, xmax, ymax]` dalam piksel gambar asli, ukuran gambar, serta checkpoint. Folder output berbeda dapat dipilih untuk menyimpan hasil percobaan terpisah.
-
-Dimensi panjang/lebar/tinggi tetap `null`, status `not_calibrated`. Label kotak 2D tidak menyediakan ukuran fisik/3D. Pengukuran memerlukan kalibrasi, geometri pandang, dan ukuran acuan. Load cell, PostgreSQL, dan metode sistem cerdas tidak diperlukan untuk menjalankan alur gambar ini.
-
-## Referensi
-
-- [TensorFlow: instalasi dan GPU Windows/WSL2](https://www.tensorflow.org/install/pip)
-- [TensorFlow Object Detection API: training](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_training_and_evaluation.md)
-- [Model Zoo SSD MobileNet V2 FPNLite](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md)
-- [NVIDIA CUDA on WSL](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)
-- [LabelImg YOLO](https://github.com/HumanSignal/labelImg#yolo)
+Dataset buatan diproses dalam folder sementara. Tes TensorFlow/OpenCV dilewati jika dependensinya belum tersedia.

@@ -1,6 +1,5 @@
 """Read-only checks of training/exported weights and a few SavedModel predictions."""
 
-import argparse
 import hashlib
 import json
 import os
@@ -69,12 +68,12 @@ def summarize_predictions(result, classes):
             'top_5': top}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', default='configs/training.json')
-    args = parser.parse_args()
-    root = Path(__file__).resolve().parents[1]
-    config = json.loads((root / args.config).read_text(encoding='utf-8-sig'))
+def diagnose(config, root, output_path='outputs/model-diagnosis.json'):
+    from .processing import preprocess_image
+    from .settings import training_plan
+    output = (root / output_path).resolve()
+    if not output.is_relative_to(root.resolve()):
+        raise ValueError('Laporan diagnosis harus berada di dalam repo.')
     run = root / config['run_dir']
     frozen = json.loads((run / 'inputs.json').read_text(encoding='utf-8'))
     metadata = json.loads((run / 'export.json').read_text(encoding='utf-8'))
@@ -94,7 +93,8 @@ def main():
     saved = root / metadata['saved_model']
     exported = tf.train.latest_checkpoint(str(saved.parent / 'checkpoint'))
     report = {'tensorflow_version': tf.__version__, 'classes': manifest['classes'],
-              'configured_steps': frozen['config']['num_steps'], 'checkpoint_global_step': global_step(reader),
+              'configured_steps': training_plan(frozen['config'], manifest)['num_steps'],
+              'checkpoint_global_step': global_step(reader),
               'latest_training_checkpoint': Path(latest).name, 'export_metadata_checkpoint': metadata['checkpoint'],
               'export_metadata_is_latest': metadata['checkpoint'] == Path(latest).name,
               'export_metadata_classes': metadata.get('classes'),
@@ -121,23 +121,19 @@ def main():
                 report['samples'].append({'image': row['image'], 'error': 'Gambar tidak ditemukan.'})
                 continue
             with Image.open(source) as original:
-                image = np.asarray(original.convert('RGB'), dtype=np.uint8)
+                image = np.asarray(preprocess_image(original, metadata.get('preprocessing')), dtype=np.uint8)
             result = detector(tf.convert_to_tensor(image[None, ...]))
             report['samples'].append({'kind': 'train_image', 'image': row['image'], 'expected_class': name,
                                       'image_matches_training_manifest': hashlib.sha256(source.read_bytes()).hexdigest() == row['sha256'],
                                       'expected_class_ids': [box['class_id'] for box in row['boxes']],
                                       **summarize_predictions(result, manifest['classes'])})
-        blank = np.full((640, 640, 3), 127, dtype=np.uint8)
+        blank = np.asarray(preprocess_image(Image.new('RGB', (640, 640), (127, 127, 127)), metadata.get('preprocessing')))
         result = detector(tf.convert_to_tensor(blank[None, ...]))
         report['samples'].append({'kind': 'blank_gray_image', **summarize_predictions(result, manifest['classes'])})
-    output = root / 'outputs/model-diagnosis.json'
-    output.parent.mkdir(exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False), encoding='utf-8')
     print(f'Langkah pada checkpoint: {report["checkpoint_global_step"]}', flush=True)
     if report['weight_comparison'] is not None:
         print(f'Bobot training dan ekspor identik: {report["weight_comparison"]["all_model_weights_identical"]}', flush=True)
     print(f'Laporan pemeriksaan: {output}', flush=True)
-
-
-if __name__ == '__main__':
-    main()
+    return report
