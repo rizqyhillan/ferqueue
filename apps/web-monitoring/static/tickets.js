@@ -73,7 +73,7 @@ export function createTicket(inspection, history = [], now = new Date()) {
     category: inspection.category,
     length: inspection.length ?? '7,20',
     height: inspection.height ?? '3,10',
-    vehicleStatus: inspection.vehicleStatus === 'Anomali' ? 'Anomali' : 'Normal',
+    vehicleStatus: inspection.vehicleStatus === 'Perlu Pemeriksaan Lanjutan' ? 'Perlu Pemeriksaan Lanjutan' : 'Normal',
     createdAt: now.toISOString(),
     source: 'manual-demo',
   });

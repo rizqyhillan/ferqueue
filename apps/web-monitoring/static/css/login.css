@@ -1,0 +1,317 @@
+/* ==========================================================================
+   FERQUEUE Web Monitoring — Login Page
+   login.css
+   ========================================================================== */
+
+@import url('variables.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.login-body {
+  font-family: var(--font-family);
+  background: var(--clr-page-bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Topbar */
+.login-header {
+  height: 60px;
+  padding: 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.login-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-header__icon {
+  width: 32px;
+  height: 32px;
+  background: var(--clr-navy);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.login-header__icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: #ffffff;
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.login-header__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-header__title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.login-header__sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--clr-text-muted);
+  letter-spacing: 0.05em;
+}
+
+.login-header__secure {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--clr-accent);
+}
+
+/* Main card */
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: #ffffff;
+  border: 1px solid var(--clr-border);
+  border-radius: 16px;
+  padding: 36px 32px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-card__icon-box {
+  width: 48px;
+  height: 48px;
+  background: var(--clr-navy);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 10px rgba(12, 39, 68, 0.2);
+}
+
+.login-card__icon-box svg {
+  width: 26px;
+  height: 26px;
+  stroke: #ffffff;
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.login-card__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--clr-navy);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.login-card__subtitle {
+  font-size: 12.5px;
+  color: var(--clr-text-muted);
+  margin-bottom: 24px;
+}
+
+.login-alert {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--clr-danger-bg);
+  border: 1px solid #FECACA;
+  border-radius: var(--radius-md);
+  color: var(--clr-danger-text);
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.login-form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--clr-text-base);
+}
+
+.login-form-forgot {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--clr-accent);
+}
+
+.login-form-forgot:hover {
+  text-decoration: underline;
+}
+
+.login-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--clr-text-muted);
+  pointer-events: none;
+}
+
+.login-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 40px 0 38px;
+  background: var(--clr-input-bg);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--clr-text-dark);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.login-input:focus {
+  background: #ffffff;
+  border-color: var(--clr-accent);
+  box-shadow: 0 0 0 3px var(--clr-accent-light);
+}
+
+.login-input-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--clr-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-checkbox-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--clr-text-base);
+  cursor: pointer;
+  user-select: none;
+}
+
+.login-checkbox-wrap input {
+  accent-color: var(--clr-navy);
+  cursor: pointer;
+}
+
+.login-btn-submit {
+  width: 100%;
+  height: 44px;
+  background: var(--clr-navy);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background var(--transition-fast);
+}
+
+.login-btn-submit:hover {
+  background: var(--clr-primary-hover);
+}
+
+.login-copyright {
+  margin-top: 24px;
+  font-size: 11.5px;
+  color: var(--clr-text-faint);
+  text-align: center;
+}
+
+/* Bottom footer bar */
+.login-footer {
+  padding: 14px 36px;
+  border-top: 1px solid var(--clr-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--clr-text-muted);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.login-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.login-footer-badge {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: var(--clr-muted-bg);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-xs);
+  color: var(--clr-text-muted);
+}

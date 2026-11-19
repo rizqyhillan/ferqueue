@@ -9,6 +9,7 @@ __pycache__/
 .venv-tools/
 .venv-inference/
 .venv-web/
+.venv-pcv/
 .cache/
 venv/
 .pytest_cache/s
