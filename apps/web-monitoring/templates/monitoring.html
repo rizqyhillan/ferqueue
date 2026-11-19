@@ -50,7 +50,7 @@
       </div>
 
       <!-- Camera Viewport with Overlays -->
-      <div class="mon-cam-viewport">
+      <div class="mon-cam-viewport" id="camera-viewport">
         <!-- Top bar overlay -->
         <div class="mon-cam-overlay-top">
           <span class="mon-cam-rec">REC PRATINJAU SISI</span>
@@ -58,7 +58,15 @@
           <span class="mon-cam-tag">CAM 01</span>
         </div>
 
-        <!-- Truck SVG Image -->
+        <!-- Truck SVG / Uploaded Image & Live Video -->
+        <video
+          id="camera-video"
+          class="mon-cam-img"
+          autoplay
+          playsinline
+          muted
+          hidden
+        ></video>
         <img
           id="camera-feed"
           src="/static/assets/camera-demo.svg"
@@ -143,6 +151,15 @@
           <span>Unggah Foto</span>
         </button>
         <input type="file" id="file-upload" accept="image/*" style="display:none;" />
+      </div>
+
+      <!-- Kalibrasi Koin 50 Yen -->
+      <div class="coin-calibration">
+        <div class="coin-actions">
+          <button type="button" class="btn btn--outline" id="select-coin" aria-pressed="false" disabled>Tandai koin 50 yen</button>
+          <button type="button" class="text-button" id="clear-coin" hidden>Hapus kalibrasi</button>
+        </div>
+        <p id="coin-status" role="status">Aktifkan kamera atau unggah foto tampak samping untuk menandai koin.</p>
       </div>
     </div>
   </div>

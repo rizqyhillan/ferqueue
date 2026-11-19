@@ -9,7 +9,9 @@ import tensorflow as tf
 from PIL import Image
 
 from .__main__ import load_config
+from .side_measurement import COIN_REGION_HEADER, estimate_side, parse_coin_region
 from .training import detect, load_detector
+from .side_measurement import COIN_REGION_HEADER, estimate_side, parse_coin_region
 
 ROOT = Path.cwd()
 CONFIG = load_config(os.environ.get("CV_CONFIG_PATH", "configs/training-coco-bn.json"), ROOT)
@@ -74,6 +76,20 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("Origin") not in ORIGINS | {None}:
             return self.reply({"error": "Origin tidak diizinkan"}, 403)
 
+        region = self.headers.get(COIN_REGION_HEADER)
+        try:
+            region = parse_coin_region(region) if region is not None else None
+        except ValueError:
+            return self.reply(
+                {"error": "Area koin harus berupa kotak di dalam gambar."}, 400
+            )
+
+        region = self.headers.get(COIN_REGION_HEADER)
+        try :
+            region = parse_coin_region(region) if region is not None else None
+        except ValueError :
+            return self.reply({"error": "Area koin harus berupa kotak di dalam gambar."}, 400)
+
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if not 0 < size <= 2 * 1024 * 1024:
@@ -111,12 +127,20 @@ class Handler(BaseHTTPRequestHandler):
                         "box": result["detection_boxes"][i].tolist(),
                     })
 
-            self.reply({
+            payload = {
                 "detections": detections,
                 "inference_ms": round(
                     (perf_counter() - started) * 1000
                 ),
-            })
+            }
+            if region is not None:
+                try:
+                    payload["calibration"] = estimate_side(
+                        image, region, detections
+                    )
+                except ImportError:
+                    payload["calibration"] = {"status": "unavailable"}
+            self.reply(payload)
         except Exception as error:
             self.reply({"error": str(error)}, 400)
 

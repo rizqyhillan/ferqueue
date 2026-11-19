@@ -398,7 +398,9 @@ function init() {
   document.getElementById('btn-reload-cam')?.addEventListener('click', () => {
     const img = document.getElementById('camera-feed');
     if (img) {
+      img.dataset.pcv = 'false';
       img.src = `/static/assets/camera-demo.svg?t=${Date.now()}`;
+      window.dispatchEvent(new CustomEvent('ferqueue:camera-reset'));
       toast('Kamera kendaraan berhasil di-refresh', 'info');
     }
   });
@@ -414,13 +416,28 @@ function init() {
         const reader = new FileReader();
         reader.onload = (event) => {
           const img = document.getElementById('camera-feed');
-          if (img) img.src = event.target.result;
+          if (img) {
+            img.dataset.pcv = 'true';
+            img.hidden = false;
+            img.src = event.target.result;
+          }
+          window.dispatchEvent(new CustomEvent('ferqueue:camera-reset'));
           toast('Foto kendaraan berhasil diunggah', 'success');
         };
         reader.readAsDataURL(file);
       }
     });
   }
+
+  // Update dimensi panjang & tinggi dari kalibrasi koin 50 yen
+  window.addEventListener('ferqueue:camera-measurement', (e) => {
+    const estimate = e.detail?.estimate;
+    if (estimate) {
+      state.panjang = Math.round(estimate.length_cm);
+      state.tinggi = Math.round(estimate.height_cm);
+      renderUI();
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
