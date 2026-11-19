@@ -17,8 +17,11 @@ class CameraIntegrationTests(unittest.TestCase):
         page = self.client.get('/monitoring')
         self.assertEqual(page.status_code, 200)
         self.assertIn(b'/static/js/monitoring.js', page.data)
+        self.assertIn(b'id="camera-video"', page.data)
+        self.assertIn(b'id="camera-message"', page.data)
         js = self.client.get('/static/js/monitoring.js')
         self.assertIn(b"import './live_detection.js'", js.data)
+        self.assertIn(b'getUserMedia', js.data)
         js.close()
         with self.client.get('/static/js/live_detection.js') as module:
             self.assertEqual(module.status_code, 200)

@@ -20,6 +20,10 @@ const state = {
   status: 'Normal / Lolos',
   tarif: 642000,
   sensorLive: true,
+  stream: null,
+  imageUrl: null,
+  cameraMode: 'demo',    // 'demo' | 'live' | 'upload'
+  cvActive: false,
 };
 
 function updateClocks() {
@@ -394,14 +398,167 @@ function init() {
     }
   });
 
-  // Reload cam button
-  document.getElementById('btn-reload-cam')?.addEventListener('click', () => {
+  // ------------------------------------------------------------------
+  // KAMERA PERANGKAT (getUserMedia) & UNGGAH FOTO UNTUK PCV
+  // ------------------------------------------------------------------
+  function setCameraMessage(text, isError = false) {
+    const msgEl = document.getElementById('camera-message');
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.classList.toggle('is-error', Boolean(isError));
+  }
+
+  function stopCamera() {
+    if (state.stream) {
+      state.stream.getTracks().forEach((track) => track.stop());
+      state.stream = null;
+    }
+    const video = document.getElementById('camera-video');
+    if (video) {
+      video.srcObject = null;
+    }
+  }
+
+  function clearUploadedImage() {
+    if (state.imageUrl) {
+      URL.revokeObjectURL(state.imageUrl);
+      state.imageUrl = null;
+    }
+  }
+
+  function updateCameraUI() {
+    const live = state.cameraMode === 'live';
+    const demo = state.cameraMode === 'demo';
+    const video = document.getElementById('camera-video');
+    const img = document.getElementById('camera-feed');
+    const demoBbox = document.getElementById('cam-demo-bbox');
+    const sourceBadge = document.getElementById('cam-source-badge');
+    const camBtnSpan = document.querySelector('#btn-reload-cam span');
+
+    if (video) video.hidden = !live;
+    if (img) img.hidden = live;
+    if (demoBbox) demoBbox.hidden = !demo;
+    if (sourceBadge) {
+      sourceBadge.textContent = live
+        ? 'LIVE KAMERA'
+        : demo
+        ? 'REC PRATINJAU SISI'
+        : 'FOTO DIUNGGAH';
+    }
+    if (camBtnSpan) {
+      camBtnSpan.textContent = live ? 'Matikan Kamera' : 'Aktifkan Kamera';
+    }
+  }
+
+  function resetCameraPreview(message = 'Kamera perangkat dapat diaktifkan secara manual atau unggah foto kendaraan.') {
+    stopCamera();
+    clearUploadedImage();
+    state.cameraMode = 'demo';
+    state.cvActive = false;
     const img = document.getElementById('camera-feed');
     if (img) {
       img.dataset.pcv = 'false';
-      img.src = `/static/assets/camera-demo.svg?t=${Date.now()}`;
+      img.src = '/static/assets/camera-demo.svg';
+      img.alt = 'Truck Camera Feed';
+    }
+    updateCameraUI();
+    window.dispatchEvent(new CustomEvent('ferqueue:camera-reset'));
+    setCameraMessage(message, false);
+  }
+
+  async function requestCameraStream() {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false,
+      });
+    } catch (err) {
+      if (err?.name === 'OverconstrainedError' || err?.name === 'NotFoundError') {
+        return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      throw err;
+    }
+  }
+
+  async function toggleCamera() {
+    const camBtn = document.getElementById('btn-reload-cam');
+    if (state.stream) {
+      resetCameraPreview('Kamera dimatikan. Klik Aktifkan Kamera untuk menyalakan kembali.');
+      toast('Kamera dimatikan.', 'info');
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      const msg = 'Kamera tidak tersedia di browser ini. Buka halaman lewat http://localhost:5000 atau HTTPS, atau gunakan Unggah Foto.';
+      setCameraMessage(msg, true);
+      toast('Kamera tidak tersedia. Pastikan akses lewat localhost/HTTPS.', 'warning');
+      return;
+    }
+
+    if (camBtn) camBtn.disabled = true;
+    setCameraMessage('Menunggu izin akses kamera perangkat…', false);
+
+    try {
+      const stream = await requestCameraStream();
+      const video = document.getElementById('camera-video');
+      const img = document.getElementById('camera-feed');
+      if (!video) {
+        stream.getTracks().forEach((t) => t.stop());
+        throw new Error('Elemen video kamera tidak ditemukan.');
+      }
+
+      stopCamera();
+      clearUploadedImage();
+      state.stream = stream;
+      state.cameraMode = 'live';
+      if (img) img.dataset.pcv = 'false';
+
+      video.srcObject = stream;
+      updateCameraUI();
+      await video.play();
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.addEventListener('ended', () => {
+          resetCameraPreview('Koneksi kamera terputus. Klik Aktifkan Kamera untuk mencoba lagi.');
+        }, { once: true });
+      }
+
       window.dispatchEvent(new CustomEvent('ferqueue:camera-reset'));
-      toast('Kamera kendaraan berhasil di-refresh', 'info');
+      setCameraMessage('Kamera aktif. Menghubungkan API PCV untuk deteksi kendaraan…', false);
+      toast('Kamera berhasil diaktifkan.', 'success');
+    } catch (error) {
+      stopCamera();
+      state.cameraMode = 'demo';
+      updateCameraUI();
+      const messages = {
+        NotAllowedError: 'Akses kamera ditolak. Izinkan akses kamera di pengaturan browser (ikon gembok/kamera di address bar), lalu coba lagi.',
+        PermissionDeniedError: 'Akses kamera ditolak. Izinkan akses kamera di pengaturan browser, lalu coba lagi.',
+        NotFoundError: 'Tidak ada kamera yang terdeteksi di perangkat ini. Hubungkan webcam atau gunakan Unggah Foto.',
+        DevicesNotFoundError: 'Tidak ada kamera yang terdeteksi di perangkat ini. Hubungkan webcam atau gunakan Unggah Foto.',
+        NotReadableError: 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi tersebut lalu coba lagi.',
+        TrackStartError: 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi tersebut lalu coba lagi.',
+        SecurityError: 'Akses kamera diblokir keamanan browser. Buka halaman lewat http://localhost:5000 atau HTTPS.',
+      };
+      const errMsg = messages[error?.name] || `Kamera gagal diaktifkan (${error?.name || error?.message || 'Error tidak dikenal'}). Coba lagi atau gunakan Unggah Foto.`;
+      setCameraMessage(errMsg, true);
+      toast('Kamera belum bisa diaktifkan. Periksa pesan di bawah tampilan kamera.', 'warning');
+    } finally {
+      if (camBtn) camBtn.disabled = false;
+    }
+  }
+
+  document.getElementById('btn-reload-cam')?.addEventListener('click', toggleCamera);
+
+  // Fullscreen viewport button
+  document.getElementById('btn-expand-cam')?.addEventListener('click', async () => {
+    const viewport = document.getElementById('camera-viewport');
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (viewport?.requestFullscreen) await viewport.requestFullscreen();
+      else toast('Layar penuh tidak tersedia di browser ini.', 'info');
+    } catch {
+      toast('Browser belum mengizinkan tampilan layar penuh.', 'warning');
     }
   });
 
@@ -410,21 +567,40 @@ function init() {
   const fileInput = document.getElementById('file-upload');
   if (uploadBtn && fileInput) {
     uploadBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => {
+    fileInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const img = document.getElementById('camera-feed');
-          if (img) {
-            img.dataset.pcv = 'true';
-            img.hidden = false;
-            img.src = event.target.result;
-          }
-          window.dispatchEvent(new CustomEvent('ferqueue:camera-reset'));
-          toast('Foto kendaraan berhasil diunggah', 'success');
-        };
-        reader.readAsDataURL(file);
+      e.target.value = '';
+      if (!file) return;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 12 * 1024 * 1024) {
+        setCameraMessage('Pilih gambar JPG, PNG, atau WebP dengan ukuran maksimal 12 MB.', true);
+        toast('Format gambar harus JPG, PNG, atau WebP (maks. 12 MB).', 'warning');
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      try {
+        const probe = new Image();
+        probe.src = url;
+        await probe.decode();
+
+        stopCamera();
+        clearUploadedImage();
+        state.imageUrl = url;
+        state.cameraMode = 'upload';
+
+        const img = document.getElementById('camera-feed');
+        if (img) {
+          img.dataset.pcv = 'true';
+          img.src = url;
+          img.alt = `Foto kendaraan: ${file.name}`;
+        }
+        updateCameraUI();
+        window.dispatchEvent(new CustomEvent('ferqueue:camera-reset'));
+        setCameraMessage('Foto diunggah. Mengirim ke API PCV untuk deteksi…', false);
+        toast('Foto kendaraan berhasil diunggah.', 'success');
+      } catch {
+        URL.revokeObjectURL(url);
+        setCameraMessage('Gambar tidak dapat dibuka. Pilih file gambar lain.', true);
+        toast('Gambar tidak dapat dibuka.', 'warning');
       }
     });
   }
@@ -438,6 +614,40 @@ function init() {
       renderUI();
     }
   });
+
+  // Update jenis kendaraan & status pesan dari hasil deteksi PCV
+  window.addEventListener('ferqueue:cv-result', (e) => {
+    const data = e.detail;
+    state.cvActive = true;
+    const msgEl = document.getElementById('camera-message');
+    if (msgEl) msgEl.classList.remove('is-error');
+    if (data?.calibration_only) {
+      state.vehicleType = 'Mode Kalibrasi Koin Aktif';
+    } else if (data?.detections?.length) {
+      const classes = [...new Set(data.detections.map((item) => item.class_name))];
+      state.vehicleType = classes.join(', ');
+    } else {
+      state.vehicleType = 'Belum ada kendaraan terdeteksi';
+    }
+    renderUI();
+  });
+
+  window.addEventListener('ferqueue:cv-error', () => {
+    state.cvActive = true;
+    const msgEl = document.getElementById('camera-message');
+    if (msgEl) msgEl.classList.add('is-error');
+  });
+
+  window.addEventListener('pagehide', () => {
+    stopCamera();
+    clearUploadedImage();
+  });
+
+  updateCameraUI();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

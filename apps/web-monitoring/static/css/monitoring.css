@@ -39,6 +39,7 @@
 .mon-cam-viewport {
   background: #071321;
   position: relative;
+  height: 340px;
   min-height: 310px;
   display: flex;
   align-items: center;
@@ -51,6 +52,21 @@
   max-height: 290px;
   object-fit: contain;
   filter: contrast(1.05);
+}
+
+.mon-cam-video,
+#camera-feed[data-pcv="true"] {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  object-position: center;
+  background: #071321;
+  filter: none;
+}
+
+.mon-cam-viewport [hidden] {
+  display: none !important;
 }
 
 /* Top bar overlay */
@@ -67,6 +83,7 @@
   font-weight: 600;
   color: #94A3B8;
   pointer-events: none;
+  z-index: 2;
 }
 
 .mon-cam-rec {
@@ -167,6 +184,7 @@
   font-size: 10.5px;
   color: #64748B;
   pointer-events: none;
+  z-index: 2;
 }
 
 .mon-cam-port-side {
@@ -283,6 +301,19 @@
   padding: 12px 20px;
   border-top: 1px solid var(--clr-border-light);
   background: #ffffff;
+}
+
+.mon-cam-status {
+  margin: 0;
+  padding: 0 20px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--clr-text-muted, #64748b);
+  background: #ffffff;
+}
+
+.mon-cam-status.is-error {
+  color: var(--clr-danger-text, #b91c1c);
 }
 
 /* --------------------------------------------------------------------------
