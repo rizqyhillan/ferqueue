@@ -9,12 +9,16 @@ import './live_detection.js';
 
 const $ = s => document.querySelector(s);
 
+const DEFAULT_DEMO_PANJANG = 720; // cm
+const DEFAULT_DEMO_TINGGI = 320;  // cm
+
 // State monitoring (default initial state persis sesuai Screenshot 2)
 const state = {
   weight: 8450,          // Satuan kg
   vehicleType: 'Truk Sedang Boks (Golongan V-A)',
-  panjang: 720,          // cm
-  tinggi: 320,           // cm
+  panjang: DEFAULT_DEMO_PANJANG, // cm
+  tinggi: DEFAULT_DEMO_TINGGI,   // cm
+  cameraDimensionsActive: false,
   golongan: 'GOL. V-A',
   golonganDesc: 'Kendaraan Barang Sedang',
   status: 'Normal / Lolos',
@@ -25,6 +29,36 @@ const state = {
   cameraMode: 'demo',    // 'demo' | 'live' | 'upload'
   cvActive: false,
 };
+
+function formatDimCm(value) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace('.', ',');
+}
+
+function useCmDisplay(panjang, tinggi) {
+  return state.cameraDimensionsActive || (Number.isFinite(panjang) && Number.isFinite(tinggi) && panjang < 100 && tinggi < 100);
+}
+
+function formatDimShort(value, preferCm) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return preferCm ? `${formatDimCm(value)} cm` : `${(value / 100).toFixed(2)}m`;
+}
+
+function formatDimSummary(panjang, tinggi) {
+  if (!Number.isFinite(panjang) || !Number.isFinite(tinggi)) return 'P: — · T: —';
+  if (useCmDisplay(panjang, tinggi)) {
+    return `P: ${formatDimCm(panjang)} cm · T: ${formatDimCm(tinggi)} cm`;
+  }
+  return `P: ${(panjang / 100).toFixed(2)} m · T: ${(tinggi / 100).toFixed(2)} m`;
+}
+
+function formatDimPair(panjang, tinggi) {
+  if (!Number.isFinite(panjang) || !Number.isFinite(tinggi)) return '— × —';
+  if (useCmDisplay(panjang, tinggi)) {
+    return `${formatDimCm(panjang)} cm × ${formatDimCm(tinggi)} cm`;
+  }
+  return `${(panjang / 100).toFixed(2)} m × ${(tinggi / 100).toFixed(2)} m`;
+}
 
 function updateClocks() {
   const now = new Date();
@@ -52,23 +86,22 @@ function renderUI() {
   }
 
   // Update dimensi di kamera & panel
-  const pM = (state.panjang / 100).toFixed(2);
-  const tM = (state.tinggi / 100).toFixed(2);
+  const preferCm = useCmDisplay(state.panjang, state.tinggi);
 
   const overlayDims = document.getElementById('cam-overlay-dims');
-  if (overlayDims) overlayDims.textContent = `◄ P: ${pM}m | T: ${tM}m ►`;
+  if (overlayDims) overlayDims.textContent = `◄ P: ${formatDimShort(state.panjang, preferCm)} | T: ${formatDimShort(state.tinggi, preferCm)} ►`;
 
   const detVehicle = document.getElementById('det-vehicle-type');
   if (detVehicle) detVehicle.textContent = state.vehicleType;
 
   const detP = document.getElementById('det-p');
-  if (detP) detP.textContent = state.panjang;
+  if (detP) detP.textContent = formatDimCm(state.panjang);
 
   const detT = document.getElementById('det-t');
-  if (detT) detT.textContent = state.tinggi;
+  if (detT) detT.textContent = formatDimCm(state.tinggi);
 
   const dimsSummary = document.getElementById('class-dims-summary');
-  if (dimsSummary) dimsSummary.textContent = `P: ${pM} m · T: ${tM} m`;
+  if (dimsSummary) dimsSummary.textContent = formatDimSummary(state.panjang, state.tinggi);
 
   const classDisplay = document.getElementById('class-display');
   if (classDisplay) classDisplay.textContent = state.golongan;
@@ -130,8 +163,12 @@ async function pollSensor() {
     const stRes = await fetch(`${API_BASE_URL}/api/status-kendaraan`);
     if (stRes.ok) {
       const stData = await stRes.json();
-      if (stData.P > 0) state.panjang = Math.round(stData.P * 100);
-      if (stData.T > 0) state.tinggi = Math.round(stData.T * 100);
+      if (!state.cameraDimensionsActive) {
+        const pVal = Number(stData.P);
+        const tVal = Number(stData.T);
+        if (Number.isFinite(pVal) && pVal > 0) state.panjang = Number(pVal.toFixed(2));
+        if (Number.isFinite(tVal) && tVal > 0) state.tinggi = Number(tVal.toFixed(2));
+      }
       if (stData.golongan && stData.golongan !== '-') state.golongan = `GOL. ${stData.golongan}`;
       if (stData.status) state.status = stData.status;
     }
@@ -182,10 +219,9 @@ function showTicketModal(ticket) {
   const elClass = document.getElementById('modal-vehicle-class');
   if (elClass) elClass.textContent = vehicleClass;
 
-  const pM = (state.panjang / 100).toFixed(2);
-  const tM = (state.tinggi / 100).toFixed(2);
+  const preferCm = useCmDisplay(state.panjang, state.tinggi);
   const elDims = document.getElementById('modal-dims');
-  if (elDims) elDims.textContent = `${pM} m × ${tM} m`;
+  if (elDims) elDims.textContent = formatDimPair(state.panjang, state.tinggi);
 
   const elWeight = document.getElementById('modal-weight');
   const weightKg = formatNumber(Math.round(ticket.berat || state.weight));
@@ -218,7 +254,7 @@ function showTicketModal(ticket) {
     if (totalBox) totalBox.style.display = 'none';
     if (violationBox) violationBox.style.display = 'block';
     if (violationDesc) {
-      violationDesc.innerHTML = `Kendaraan terdeteksi <strong>Over Dimension / Over Load (ODOL)</strong>: P: ${pM}m | T: ${tM}m | Berat: ${weightKg}kg melebihi batas legal PM 59/2022.<br><br><strong>Instruksi Petugas Lapangan:</strong> Palang gerbang utama DITUTUP. Pengemudi wajib membawa lembar disposisi ini ke <strong>Pos Jalur Inspeksi Fisik (U-Turn Bay) Gate #03</strong> untuk verifikasi manual pita ukur oleh petugas pengawas.`;
+      violationDesc.innerHTML = `Kendaraan terdeteksi <strong>Over Dimension / Over Load (ODOL)</strong>: P: ${formatDimShort(state.panjang, preferCm)} | T: ${formatDimShort(state.tinggi, preferCm)} | Berat: ${weightKg}kg melebihi batas legal PM 59/2022.<br><br><strong>Instruksi Petugas Lapangan:</strong> Palang gerbang utama DITUTUP. Pengemudi wajib membawa lembar disposisi ini ke <strong>Pos Jalur Inspeksi Fisik (U-Turn Bay) Gate #03</strong> untuk verifikasi manual pita ukur oleh petugas pengawas.`;
     }
     if (printBtn) printBtn.className = 'btn btn--danger';
     if (printText) printText.textContent = 'Cetak Tiket Pelanggaran';
@@ -607,12 +643,20 @@ function init() {
 
   // Update dimensi panjang & tinggi dari kalibrasi koin 50 yen
   window.addEventListener('ferqueue:camera-measurement', (e) => {
+    const active = Boolean(e.detail?.active);
     const estimate = e.detail?.estimate;
-    if (estimate) {
-      state.panjang = Math.round(estimate.length_cm);
-      state.tinggi = Math.round(estimate.height_cm);
-      renderUI();
+    state.cameraDimensionsActive = active;
+    if (estimate && Number.isFinite(estimate.length_cm) && Number.isFinite(estimate.height_cm)) {
+      state.panjang = Number(estimate.length_cm.toFixed(2));
+      state.tinggi = Number(estimate.height_cm.toFixed(2));
+    } else if (active || state.cameraMode !== 'demo') {
+      state.panjang = null;
+      state.tinggi = null;
+    } else {
+      state.panjang = DEFAULT_DEMO_PANJANG;
+      state.tinggi = DEFAULT_DEMO_TINGGI;
     }
+    renderUI();
   });
 
   // Update jenis kendaraan & status pesan dari hasil deteksi PCV

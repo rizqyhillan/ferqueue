@@ -48,7 +48,9 @@ def find_coin(image, region):
             fill = cv2.contourArea(contour) / (math.pi * minor * major / 4)
             if not .82 <= fill <= 1.12:
                 continue
-            diameter = (minor + major) / 2
+            # Use the un-foreshortened major axis for slightly tilted coins and add 1 px
+            # because findContours traces centers of inner boundary pixels.
+            diameter = major + 1.0
             candidates.append({
                 'center': [(top + cy) / height, (left + cx) / width],
                 'diameter_px': diameter,
