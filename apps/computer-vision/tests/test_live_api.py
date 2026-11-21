@@ -151,6 +151,58 @@ class LiveApiContractTests(unittest.TestCase):
                 status, _ = self.send('/detect', b'png', {'Content-Type': 'image/png', 'X-Coin-Region': region})
                 self.assertEqual(status, 400)
 
+    def test_invalid_camera_geometry_is_rejected(self):
+        for header in ('27.7,14.3', '0,14.3,1.0', '27.7,-1,1.0', '27.7,14.3,0', '27.7,14.3,nan', 'bad,14.3,1.0'):
+            with self.subTest(header=header):
+                status, _ = self.send('/detect', b'png', {'Content-Type': 'image/png', 'X-Camera-Geometry': header})
+                self.assertEqual(status, 400)
+
+    def test_camera_geometry_trigonometry_estimates_length_and_height(self):
+        import numpy as np
+        encoded = io.BytesIO()
+        Image.new('RGB', (640, 360), 'white').save(encoded, format='PNG')
+        # Triangle: d_perp = 27.7 cm, d_parallel = 14.3 cm -> D = 31.17 cm, yaw = 27.31 deg.
+        # focal_norm = 654.57 / 640 = 1.022766 -> cm_per_px = 31.1734 / 654.57 = 0.047624 cm/px.
+        # Box: dx = 0.25 * 640 = 160 px -> proj_len = 7.62 cm -> Mobil (L=2.25) -> P = (7.62 - 2.25*sin)/cos = 7.41 cm.
+        #      dy = 0.13 * 360 = 46.8 px -> T = 2.23 cm.
+        headers = {'Content-Type': 'image/png', 'X-Camera-Geometry': '27.7,14.3,1.022766'}
+        result = {'detection_boxes': np.array([[.45, .40, .58, .65]]),
+                  'detection_scores': np.array([.9]), 'detection_classes': np.array([1])}
+        with patch('ferqueue_cv.live_api.detect', return_value=result):
+            status, payload = self.send('/detect', encoded.getvalue(), headers)
+        self.assertEqual(status, 200)
+        cal = payload['calibration']
+        self.assertEqual(cal['status'], 'ready')
+        self.assertEqual(cal['method'], 'trigonometry')
+        self.assertAlmostEqual(cal['geometry']['distance_cm'], 31.17, delta=.01)
+        self.assertAlmostEqual(cal['geometry']['yaw_deg'], 27.31, delta=.01)
+        measurement = cal['measurement']
+        self.assertEqual(measurement['status'], 'estimated')
+        self.assertAlmostEqual(measurement['length_cm'], 7.41, delta=.02)
+        self.assertAlmostEqual(measurement['height_cm'], 2.23, delta=.02)
+        self.assertEqual(measurement['assumed_width_cm'], 2.25)
+
+    def test_camera_geometry_edge_cases(self):
+        from ferqueue_cv.side_measurement import estimate_side_from_geometry
+
+        frame = Image.new('RGB', (640, 360), 'white')
+        geometry = (27.7, 14.3, 1.022766)
+        self.assertEqual(estimate_side_from_geometry(frame, geometry, [])['measurement'], {'status': 'no_vehicle'})
+        box = {'class_name': 'Mobil', 'box': [.45, .40, .58, .65]}
+        self.assertEqual(estimate_side_from_geometry(frame, geometry, [box, box])['measurement'],
+                         {'status': 'multiple_vehicles'})
+        clipped = {'class_name': 'Mobil', 'box': [.45, 0.0, .58, .65]}
+        self.assertEqual(estimate_side_from_geometry(frame, geometry, [clipped])['measurement'],
+                         {'status': 'vehicle_clipped'})
+        tiny = {'class_name': 'Mobil', 'box': [.45, .40, .48, .41]}
+        self.assertEqual(estimate_side_from_geometry(frame, geometry, [tiny])['measurement'],
+                         {'status': 'vehicle_too_small'})
+        # Perpendicular camera (d_parallel = 0 -> yaw = 0): length equals projected length directly.
+        perp = estimate_side_from_geometry(frame, (30.0, 0.0, 1.0), [{'class_name': 'Truk', 'box': [.4, .2, .6, .4]}])
+        self.assertEqual(perp['geometry']['yaw_deg'], 0.0)
+        self.assertAlmostEqual(perp['measurement']['length_cm'], 6.0, delta=.01)
+        self.assertAlmostEqual(perp['measurement']['height_cm'], 3.38, delta=.01)
+
 
 if __name__ == '__main__':
     unittest.main()

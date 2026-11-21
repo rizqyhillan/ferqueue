@@ -11,11 +11,13 @@ cv_api = Blueprint("cv_api", __name__)
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 
-def forward(path, body=None, content_type=None, coin_region=None):
+def forward(path, body=None, content_type=None, coin_region=None, camera_geometry=None):
     base = current_app.config.get("CV_API_URL", os.environ.get("CV_API_URL", "http://127.0.0.1:8000"))
     headers = {"Content-Type": content_type} if content_type else {}
     if coin_region is not None:
         headers["X-Coin-Region"] = coin_region
+    if camera_geometry is not None:
+        headers["X-Camera-Geometry"] = camera_geometry
     upstream = Request(base.rstrip("/") + path, data=body, headers=headers)
     try:
         with urlopen(upstream, timeout=12) as response:
@@ -44,4 +46,10 @@ def detect():
         return jsonify(error="Kirim gambar JPG, PNG, atau WebP."), 415
     if request.content_length is None or not 0 < request.content_length <= MAX_IMAGE_BYTES:
         return jsonify(error="Ukuran gambar harus antara 1 byte dan 2 MB."), 413
-    return forward("/detect", request.get_data(), request.mimetype, request.headers.get("X-Coin-Region"))
+    return forward(
+        "/detect",
+        request.get_data(),
+        request.mimetype,
+        request.headers.get("X-Coin-Region"),
+        request.headers.get("X-Camera-Geometry"),
+    )
