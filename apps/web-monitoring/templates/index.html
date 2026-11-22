@@ -11,6 +11,24 @@
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script type="module" src="{{ url_for('static', filename='app.js') }}?v=20261111"></script>
+
+  <!-- TAMBAHAN: gaya kecil untuk tombol ENTER (buka gerbang) -->
+  <style>
+    .gate-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(128, 128, 128, .25);
+    }
+
+    .gate-message {
+      font-size: 13px;
+      opacity: .85;
+    }
+  </style>
 </head>
 
 <body>
@@ -291,6 +309,15 @@
               aria-label="Mulai pemeriksaan kendaraan berikutnya"><svg class="icon">
                 <use href="#i-refresh" />
               </svg><span>Kendaraan berikutnya</span></button></div>
+
+          <!-- TAMBAHAN: tombol ENTER untuk membuka servo/gerbang lewat web -->
+          <div class="gate-row">
+            <button class="button button-secondary" id="open-gate" type="button"
+              title="Kirim perintah buka ke servo gerbang"><svg class="icon">
+                <use href="#i-arrow" />
+              </svg><span>ENTER (Buka gerbang)</span></button>
+            <span class="gate-message" id="gate-message" role="status"></span>
+          </div>
         </div>
       </section>
     </div>
@@ -398,6 +425,9 @@
         <p>Tiket disimpan di riwayat browser ini. Pilih Cetak tiket untuk mencetak atau menyimpan PDF melalui dialog
           cetak browser.</p>
       </li>
+      <li><strong>Buka gerbang</strong>
+        <p>Tekan tombol ENTER (Buka gerbang) untuk membuka servo. Gerbang menutup otomatis setelah kendaraan lewat.</p>
+      </li>
     </ol>
     <div class="help-notice">Sistem terintegrasi: data berat dan evaluasi anomali dikirimkan secara otomatis melalui
       Flask Backend.</div>
@@ -410,6 +440,29 @@
   <noscript>
     <div class="noscript">Aktifkan JavaScript agar pemeriksaan dan penerbitan tiket dapat digunakan.</div>
   </noscript>
+
+  <!-- TAMBAHAN: logika tombol ENTER (buka gerbang) -->
+  <script>
+    (function () {
+      var btn = document.getElementById("open-gate");
+      var pesan = document.getElementById("gate-message");
+      if (!btn) return;
+
+      btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        pesan.textContent = "Mengirim perintah...";
+        try {
+          var res = await fetch("/api/buka", { method: "POST" });
+          pesan.textContent = res.ok
+            ? "Perintah buka terkirim. Gerbang akan terbuka sebentar lagi."
+            : "Gagal mengirim perintah (kode " + res.status + ").";
+        } catch (e) {
+          pesan.textContent = "Server tidak terjangkau.";
+        }
+        setTimeout(function () { btn.disabled = false; }, 1500);   // cegah klik beruntun
+      });
+    })();
+  </script>
 </body>
 
 </html>
