@@ -12,7 +12,14 @@ from PIL import Image, ImageOps
 
 from .postprocessing import select_detections
 from .settings import DEFAULT_CONFIG, load_config
-from .side_measurement import COIN_REGION_HEADER, estimate_side, parse_coin_region
+from .side_measurement import (
+    CAMERA_GEOMETRY_HEADER,
+    COIN_REGION_HEADER,
+    estimate_side,
+    estimate_side_from_geometry,
+    parse_camera_geometry,
+    parse_coin_region,
+)
 from .training import detect, load_detector
 
 
@@ -59,6 +66,11 @@ class Handler(BaseHTTPRequestHandler):
             region = parse_coin_region(region) if region is not None else None
         except ValueError:
             return self.reply({'error': 'Area koin harus berupa kotak di dalam gambar.'}, 400)
+        geometry = self.headers.get(CAMERA_GEOMETRY_HEADER)
+        try:
+            geometry = parse_camera_geometry(geometry) if geometry is not None else None
+        except ValueError:
+            return self.reply({'error': 'Parameter geometri kamera tidak valid.'}, 400)
         try:
             size = int(self.headers.get('Content-Length', '0'))
             if not 0 < size <= 2 * 1024 * 1024:
@@ -92,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
                 payload['calibration'] = estimate_side(image, region, detections)
             except ImportError:
                 payload['calibration'] = {'status': 'unavailable'}
+        elif geometry is not None:
+            payload['calibration'] = estimate_side_from_geometry(image, geometry, detections)
         self.reply(payload)
 
 

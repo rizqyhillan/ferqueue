@@ -153,13 +153,47 @@
       </div>
       <p class="mon-cam-status" id="camera-message" role="status">Kamera perangkat dapat diaktifkan secara manual atau unggah foto kendaraan.</p>
 
-      <!-- Kalibrasi Koin 50 Yen -->
+      <!-- Kalibrasi Dimensi (Segitiga & Jarak Kamera / Koin 50 Yen) -->
       <div class="coin-calibration">
-        <div class="coin-actions">
-          <button type="button" class="btn btn--outline" id="select-coin" aria-pressed="false" disabled>Tandai koin 50 yen</button>
-          <button type="button" class="text-button" id="clear-coin" hidden>Hapus kalibrasi</button>
+        <div class="cal-mode-bar" role="tablist" aria-label="Metode kalibrasi dimensi">
+          <button type="button" class="cal-mode-btn is-active" id="cal-mode-trigonometry" role="tab" aria-selected="true">Segitiga &amp; Jarak</button>
+          <button type="button" class="cal-mode-btn" id="cal-mode-coin" role="tab" aria-selected="false">Koin 50 Yen</button>
+          <span class="geo-summary-pill" id="geo-summary">D = 31,17 cm · θ = 27,31°</span>
         </div>
-        <p id="coin-status" role="status">Aktifkan kamera atau unggah foto tampak samping untuk menandai koin.</p>
+
+        <div id="cal-panel-trigonometry" class="geo-panel">
+          <div class="geo-inputs-grid">
+            <label class="geo-field">
+              <span>Jarak tegak lurus (cm)</span>
+              <input type="number" id="geo-d-perp" min="1" step="0.1" value="27.7" />
+            </label>
+            <label class="geo-field">
+              <span>Geser samping (cm)</span>
+              <input type="number" id="geo-d-parallel" min="0" step="0.1" value="14.3" />
+            </label>
+            <label class="geo-field">
+              <span>Lebar acuan (cm)</span>
+              <input type="number" id="geo-ref-cm" min="0.5" step="0.1" value="10.0" />
+            </label>
+            <label class="geo-field">
+              <span>Fokus (f_norm)</span>
+              <input type="number" id="geo-focal-norm" min="0.1" step="0.0001" placeholder="Kalibrasi 1×" />
+            </label>
+          </div>
+          <div class="coin-actions">
+            <button type="button" class="btn btn--outline" id="calibrate-geometry" aria-pressed="false" disabled>Kalibrasi acuan (2 titik)</button>
+            <button type="button" class="text-button" id="clear-geometry" hidden>Reset fokus</button>
+          </div>
+        </div>
+
+        <div id="cal-panel-coin" hidden>
+          <div class="coin-actions">
+            <button type="button" class="btn btn--outline" id="select-coin" aria-pressed="false" disabled>Tandai koin 50 yen</button>
+            <button type="button" class="text-button" id="clear-coin" hidden>Hapus kalibrasi</button>
+          </div>
+        </div>
+
+        <p id="coin-status" role="status">Aktifkan kamera atau unggah foto untuk kalibrasi jarak kamera.</p>
       </div>
     </div>
   </div>
