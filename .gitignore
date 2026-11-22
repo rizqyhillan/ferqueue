@@ -9,10 +9,9 @@ __pycache__/
 .venv-tools/
 .venv-inference/
 .venv-web/
-.venv-pcv/
 .cache/
 venv/
-.pytest_cache/s
+.pytest_cache/
 .mypy_cache/
 
 # Environment and secrets
@@ -59,6 +58,7 @@ Thumbs.db
 # Offline prediction inputs/results and local experiment artifacts
 data/inference/*
 !data/inference/.gitkeep
+data/vector_db/
 outputs/*
 !outputs/.gitkeep
 models/mobilenet/*

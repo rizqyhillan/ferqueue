@@ -7,7 +7,7 @@
 // ================= KONFIGURASI (EDIT BAGIAN INI) =================
 const char* WIFI_SSID  = "Zafar_MDR";
 const char* WIFI_PASS  = "vavifar123";
-const char* SERVER_URL = "192.168.1.12:5000/api/berat";  // IP laptop yang menjalankan Flask
+const char* SERVER_URL = "http://192.168.1.12:5000/api/berat";  // IP laptop yang menjalankan Flask
 
 const float         AMBANG_KENDARAAN_CM = 16;     // jarak di bawah ini = ada kendaraan
 const unsigned long KONFIRMASI_MS       = 300;    // kendaraan harus terdeteksi stabil selama ini

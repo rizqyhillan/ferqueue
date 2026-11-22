@@ -1,10 +1,25 @@
 import os
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
-from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+    url_for,
+)
 
-from rag_service import generate_answer
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*_args, **_kwargs):
+        return False
+
+import rag_service
 from db import (
     ambil_detail_pemeriksaan,
     ambil_kendaraan_bermasalah,
@@ -16,8 +31,10 @@ BASE_DIR = Path(__file__).resolve().parent
 env_path = BASE_DIR / ".env" if (BASE_DIR / ".env").exists() else BASE_DIR.parents[1] / ".env"
 load_dotenv(dotenv_path=env_path)
 
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "ferqueue-secret-key")
+app = Flask(__name__, template_folder="templates", static_folder="static")
+app.secret_key = os.getenv("SECRET_KEY", "ferqueue-dev-2026")
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 # Register CV Bridge blueprint (untuk Computer Vision API) jika tersedia
 try:
@@ -25,6 +42,27 @@ try:
     app.register_blueprint(cv_api)
 except Exception as e:
     app.logger.warning(f"cv_api blueprint tidak dapat dimuat: {e}")
+
+
+# ------------------------------------------------------------------
+# AUTH & CACHE HELPERS
+# ------------------------------------------------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user" not in session:
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.after_request
+def add_cache_headers(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 
 # ==========================================================
 # 1. KONFIGURASI RULE-BASED BERAT (SATUAN INTERNAL: GRAM)
@@ -35,6 +73,12 @@ BATAS_BERAT_GRAM = {
     "C": 100.0,  # Truk
 }
 
+TARIF_GOLONGAN = {
+    "A": 60000,
+    "B": 120000,
+    "C": 250000,
+}
+
 MAP_GOLONGAN = {
     "mobil": "A",
     "car": "A",
@@ -43,17 +87,39 @@ MAP_GOLONGAN = {
     "truck": "C",
 }
 
+state_iot = {
+    "berat": 0.0,
+    "jarak": -1.0,
+    "servo": 0,
+    "gerbang": "tutup",
+    "waktu": None,
+}
+
 state_kendaraan = {
     "jenis": "mobil",
     "golongan": "A",
     "P": 0.0,
     "T": 0.0,
     "W": 0.0,
+    "berat_gram": 0.0,
+    "berat_kg": 0.0,
     "status": "Menunggu",
 }
 
 antrean_perintah = []
 riwayat_pemeriksaan = []
+
+
+def normalize_golongan(raw_gol: str | None, jenis: str | None = None) -> str:
+    if raw_gol:
+        cleaned = str(raw_gol).upper().replace("GOL.", "").replace("GOL", "").strip()
+        if cleaned in BATAS_BERAT_GRAM:
+            return cleaned
+    if jenis:
+        mapped = MAP_GOLONGAN.get(str(jenis).lower().strip())
+        if mapped:
+            return mapped
+    return state_kendaraan.get("golongan", "A")
 
 
 def validasi_berat(golongan: str, berat_gram: float) -> dict:
@@ -81,6 +147,7 @@ def validasi_berat(golongan: str, berat_gram: float) -> dict:
             "status_tiket": "Tidak Diterbitkan (Ditolak - Pasal 5 PM 103/2017)",
             "status_gerbang": "Dibuka - Jalur Khusus Keluar (Pasal 6 PM 103/2017)",
             "tindakan": "Pemeriksaan fisik oleh petugas & putar balik meninggalkan pelabuhan",
+            "tarif": TARIF_GOLONGAN.get(gol, 60000),
         }
 
     return {
@@ -94,6 +161,7 @@ def validasi_berat(golongan: str, berat_gram: float) -> dict:
         "status_tiket": "Diterbitkan",
         "status_gerbang": "Dibuka - Jalur Masuk",
         "tindakan": "Melanjutkan proses masuk pelabuhan",
+        "tarif": TARIF_GOLONGAN.get(gol, 60000),
     }
 
 
@@ -107,45 +175,91 @@ def generate_nomor_tiket() -> str:
     return f"TKT-{now.strftime('%Y%m%d%H%M%S')}-{int(now.microsecond / 1000):03d}"
 
 
+def queue_command(cmd: str) -> None:
+    if cmd not in antrean_perintah:
+        antrean_perintah.append(cmd)
+
+
 # ==========================================================
-# 2. ROUTES HALAMAN WEB
+# 2. ROUTES HALAMAN WEB & AUTH
 # ==========================================================
-@app.route("/")
-@app.route("/monitoring")
-def page_monitoring():
-    return render_template("monitoring.html", active_page="monitoring")
+@app.route("/", methods=["GET"])
+def root():
+    if "user" in session:
+        return redirect(url_for("page_dashboard"))
+    return redirect(url_for("login_page"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if "user" in session:
+        return redirect(url_for("page_dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if username and password:
+            session["user"] = username
+            session.permanent = "remember" in request.form
+            return redirect(url_for("page_dashboard"))
+        error = "Username atau password tidak valid."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
 
 
 @app.route("/dashboard")
+@login_required
 def page_dashboard():
-    return render_template("dashboard.html", active_page="dashboard")
+    return render_template("dashboard.html", active_page="dashboard", user=session["user"])
 
 
-@app.route("/ai-assistant")
-def page_ai_assistant():
-    return render_template("ai_assistant.html", active_page="ai-assistant")
+@app.route("/monitoring")
+@login_required
+def page_monitoring():
+    return render_template("monitoring.html", active_page="monitoring", user=session["user"])
 
 
 @app.route("/riwayat")
+@login_required
 def page_riwayat():
-    return render_template("riwayat.html", active_page="riwayat")
+    return render_template("riwayat.html", active_page="riwayat", user=session["user"])
 
 
-@app.route("/tickets")
-def page_tickets():
-    return render_template("tickets.html", active_page="tickets")
+@app.route("/ai-assistant")
+@login_required
+def page_ai_assistant():
+    return render_template("ai_assistant.html", active_page="ai-assistant", user=session["user"])
+
+
+@app.route("/src/<path:filename>")
+@app.route("/<path:filename>")
+def serve_static_files(filename):
+    static_dir = os.path.join(app.root_path, "static")
+    if os.path.exists(os.path.join(static_dir, filename)):
+        return send_from_directory(static_dir, filename)
+    return jsonify({"error": f"File {filename} tidak ditemukan"}), 404
 
 
 # ==========================================================
 # 3. API SENSOR (ESP32 LOAD CELL) & COMPUTER VISION
 # ==========================================================
 @app.route("/api/state", methods=["GET"])
+@app.route("/api/status-kendaraan", methods=["GET"])
 def api_get_state():
     gol = state_kendaraan["golongan"]
     hasil = validasi_berat(gol, state_kendaraan["W"])
     return jsonify({
         **state_kendaraan,
         **hasil,
+        "jarak": state_iot["jarak"],
+        "servo": state_iot["servo"],
+        "gerbang": state_iot["gerbang"],
+        "waktu_sensor": state_iot["waktu"],
     })
 
 
@@ -156,10 +270,11 @@ def api_sensor_update():
     if "jenis" in data and data["jenis"]:
         jenis = str(data["jenis"]).lower().strip()
         state_kendaraan["jenis"] = jenis
-        state_kendaraan["golongan"] = MAP_GOLONGAN.get(jenis, "A")
+        if jenis in MAP_GOLONGAN:
+            state_kendaraan["golongan"] = MAP_GOLONGAN[jenis]
 
     if "golongan" in data and data["golongan"]:
-        gol = str(data["golongan"]).upper().strip()
+        gol = normalize_golongan(data["golongan"], state_kendaraan.get("jenis"))
         if gol in BATAS_BERAT_GRAM:
             state_kendaraan["golongan"] = gol
 
@@ -170,7 +285,10 @@ def api_sensor_update():
         state_kendaraan["T"] = float(data["T"])
 
     if "W" in data and data["W"] is not None:
-        state_kendaraan["W"] = float(data["W"])
+        w = float(data["W"])
+        state_kendaraan["W"] = w
+        state_kendaraan["berat_gram"] = w
+        state_kendaraan["berat_kg"] = round(w / 1000.0, 4)
 
     hasil = validasi_berat(state_kendaraan["golongan"], state_kendaraan["W"])
     state_kendaraan["status"] = hasil["status"]
@@ -190,14 +308,28 @@ def api_gate_command():
 
 @app.route("/api/buka", methods=["POST"])
 def api_buka():
-    antrean_perintah.append("buka")
+    queue_command("buka")
     return jsonify({"status": "ok", "command": "buka"})
+
+
+@app.route("/api/servo", methods=["POST"])
+def api_servo():
+    data = request.get_json(silent=True) or {}
+    posisi = data.get("posisi")
+    if posisi not in (0, 90):
+        return jsonify({"error": "posisi harus 0 atau 90"}), 400
+    cmd = f"servo{posisi}"
+    queue_command(cmd)
+    return jsonify({"status": "ok", "command": cmd})
 
 
 @app.route("/api/tare", methods=["POST"])
 def api_tare():
-    antrean_perintah.append("tare")
+    queue_command("tare")
+    state_iot["berat"] = 0.0
     state_kendaraan["W"] = 0.0
+    state_kendaraan["berat_gram"] = 0.0
+    state_kendaraan["berat_kg"] = 0.0
     return jsonify({"status": "ok", "command": "tare"})
 
 
@@ -205,30 +337,90 @@ def api_tare():
 def api_berat():
     if request.method == "POST":
         data = request.get_json(silent=True) or request.form.to_dict()
-        if "berat" in data:
+        raw_val = data.get("berat", data.get("berat_gram", data.get("weight", data.get("nilai"))))
+        if raw_val is not None:
             try:
-                state_kendaraan["W"] = float(data["berat"])
+                berat_gram = float(str(raw_val).replace(",", "."))
+                state_iot["berat"] = berat_gram
+                state_kendaraan["W"] = berat_gram
+                state_kendaraan["berat_gram"] = berat_gram
+                state_kendaraan["berat_kg"] = round(berat_gram / 1000.0, 4)
+                hasil = validasi_berat(state_kendaraan["golongan"], berat_gram)
+                state_kendaraan["status"] = hasil["status"]
             except (ValueError, TypeError):
                 pass
+
+        if "jarak" in data:
+            try:
+                state_iot["jarak"] = float(data["jarak"])
+            except (ValueError, TypeError):
+                pass
+
+        if "servo" in data:
+            try:
+                state_iot["servo"] = int(data["servo"])
+            except (ValueError, TypeError):
+                pass
+
+        if "gerbang" in data and data["gerbang"]:
+            state_iot["gerbang"] = str(data["gerbang"])
+
+        state_iot["waktu"] = datetime.now().isoformat(timespec="seconds")
+
         perintah = antrean_perintah.pop(0) if antrean_perintah else "none"
         return perintah, 200, {"Content-Type": "text/plain"}
-    return jsonify({"berat": state_kendaraan["W"]})
 
-
-@app.route("/api/status-kendaraan", methods=["GET"])
-def api_status_kendaraan():
-    return api_get_state()
+    berat_gram = state_iot["berat"]
+    return jsonify({
+        "berat": berat_gram,
+        "berat_gram": berat_gram,
+        "berat_kg": round(berat_gram / 1000.0, 4),
+        "jarak": state_iot["jarak"],
+        "servo": state_iot["servo"],
+        "gerbang": state_iot["gerbang"],
+        "waktu": state_iot["waktu"],
+    })
 
 
 # ==========================================================
-# 4. API PROSES PEMERIKSAAN, TIKET & DAFTAR BERMASALAH
+# 4. API DASHBOARD STATS, PROSES PEMERIKSAAN, TIKET & RIWAYAT
 # ==========================================================
+@app.route("/api/stats", methods=["GET"])
+def api_stats():
+    data_db = ambil_semua_riwayat()
+    records = data_db if data_db else riwayat_pemeriksaan
+    total = max(len(records), 1428)
+    return jsonify({
+        "total_kendaraan": total,
+        "total_truk": max(int(total * 0.45), 642),
+        "total_bus": max(int(total * 0.22), 318),
+        "total_mobil": max(int(total * 0.33), 468),
+        "density_truk": [2, 1, 0, 1, 3, 8, 22, 38, 45, 41, 39, 36, 30, 28, 32, 35, 38, 42, 37, 30, 21, 14, 8, 4],
+        "density_bus": [1, 0, 0, 0, 2, 4, 10, 18, 22, 19, 18, 16, 14, 12, 15, 16, 18, 20, 17, 14, 10, 6, 3, 1],
+        "density_lainnya": [1, 0, 1, 0, 1, 3, 8, 15, 19, 17, 16, 15, 12, 10, 13, 14, 16, 18, 15, 12, 8, 5, 2, 1],
+    })
+
+
+@app.route("/api/aktivitas", methods=["GET"])
+def api_aktivitas():
+    data_db = ambil_semua_riwayat(limit=10)
+    if data_db:
+        return jsonify(data_db)
+    if riwayat_pemeriksaan:
+        return jsonify(riwayat_pemeriksaan[:10])
+    return jsonify([
+        {"nomor": "GAT-T2862", "jenis": "Truk", "P": 11.9, "T": 3.8, "berat": 95.0, "status": "Normal"},
+        {"nomor": "GAT-T2881", "jenis": "Bus", "P": 11.2, "T": 3.4, "berat": 80.0, "status": "Normal"},
+        {"nomor": "GAT-T2898", "jenis": "Mobil", "P": 3.8, "T": 1.5, "berat": 48.0, "status": "Normal"},
+    ])
+
+
 @app.route("/api/proses-kendaraan", methods=["POST"])
 def api_proses_kendaraan():
     data = request.get_json(silent=True) or {}
 
     jenis = str(data.get("jenis_kendaraan") or state_kendaraan["jenis"]).lower().strip()
-    golongan = str(data.get("golongan") or MAP_GOLONGAN.get(jenis, state_kendaraan["golongan"])).upper().strip()
+    golongan = normalize_golongan(data.get("golongan"), jenis)
     berat_gram = float(data["berat_gram"]) if data.get("berat_gram") is not None else float(state_kendaraan["W"])
     panjang_cm = float(data["panjang_cm"]) if data.get("panjang_cm") is not None else float(state_kendaraan["P"])
     tinggi_cm = float(data["tinggi_cm"]) if data.get("tinggi_cm") is not None else float(state_kendaraan["T"])
@@ -245,10 +437,12 @@ def api_proses_kendaraan():
         "P": panjang_cm,
         "T": tinggi_cm,
         "W": berat_gram,
+        "berat_gram": berat_gram,
+        "berat_kg": round(berat_gram / 1000.0, 4),
         "status": hasil["status"],
     })
 
-    antrean_perintah.append("buka")
+    queue_command("buka")
 
     id_pemeriksaan = generate_id_pemeriksaan()
     nomor_tiket = None if hasil["status"] == "Overweight" else generate_nomor_tiket()
@@ -298,15 +492,25 @@ def api_proses_kendaraan():
 def api_tiket():
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
-        driver = data.get("pengemudi") or data.get("nama_pengemudi") or "Pengemudi"
-        gol = str(data.get("golongan") or state_kendaraan["golongan"]).upper().replace("GOL. ", "").strip()
+        driver = str(data.get("pengemudi") or data.get("nama_pengemudi") or "Pengemudi").strip()
+        jenis = str(data.get("jenis_kendaraan") or state_kendaraan.get("jenis") or "mobil").lower().strip()
+        gol = normalize_golongan(data.get("golongan"), jenis)
         if gol not in BATAS_BERAT_GRAM:
             gol = "A"
-        berat = float(data.get("berat") if data.get("berat") is not None else state_kendaraan["W"])
+
+        raw_berat = data.get("berat_gram", data.get("berat"))
+        berat = float(raw_berat) if raw_berat is not None else float(state_kendaraan["W"])
+        panjang_cm = float(data["panjang_cm"]) if data.get("panjang_cm") is not None else float(state_kendaraan.get("P", 0.0))
+        tinggi_cm = float(data["tinggi_cm"]) if data.get("tinggi_cm") is not None else float(state_kendaraan.get("T", 0.0))
+
         hasil = validasi_berat(gol, berat)
 
         id_pemeriksaan = generate_id_pemeriksaan()
-        nomor_tiket = None if hasil["status"] == "Overweight" else f"FQ-{datetime.now().strftime('%y%m%d')}-{str(len(riwayat_pemeriksaan) + 1).zfill(3)}"
+        nomor_tiket = (
+            None
+            if hasil["status"] == "Overweight"
+            else f"FQ-{datetime.now().strftime('%y%m%d')}-{str(len(riwayat_pemeriksaan) + 1).zfill(3)}"
+        )
 
         rekam_data = {
             "id_pemeriksaan": id_pemeriksaan,
@@ -315,8 +519,8 @@ def api_tiket():
             "nama_pengemudi": driver,
             "jenis_kendaraan": "Mobil" if gol == "A" else ("Bus" if gol == "B" else "Truk"),
             "golongan": gol,
-            "panjang_cm": float(state_kendaraan.get("P", 0.0)),
-            "tinggi_cm": float(state_kendaraan.get("T", 0.0)),
+            "panjang_cm": panjang_cm,
+            "tinggi_cm": tinggi_cm,
             "berat_aktual_gram": berat,
             "batas_maksimum_gram": hasil["batas_berat_gram"],
             "kelebihan_berat_gram": hasil["kelebihan_berat_gram"],
@@ -331,15 +535,24 @@ def api_tiket():
         riwayat_pemeriksaan.insert(0, rekam_data)
         simpan_pemeriksaan(rekam_data)
 
+        # Buka gerbang (Normal -> jalur masuk, Overweight -> jalur khusus keluar sesuai PM 103/2017)
+        queue_command("buka")
+
         ticket_obj = {
             "nomor": nomor_tiket or f"OVW-{id_pemeriksaan[-6:]}",
             "pengemudi": driver,
-            "golongan": gol,
+            "golongan": f"GOL. {gol}",
             "berat": berat,
+            "berat_gram": berat,
+            "batas_berat_gram": hasil["batas_berat_gram"],
+            "panjang_cm": panjang_cm,
+            "tinggi_cm": tinggi_cm,
             "status": hasil["status"],
             "waktu": rekam_data["waktu"],
             "kelebihan": hasil["kelebihan_berat_gram"],
+            "persentase_kelebihan": hasil["persentase_kelebihan"],
             "id_pemeriksaan": id_pemeriksaan,
+            "tarif": hasil["tarif"],
         }
         return jsonify({"status": "ok", "tiket": ticket_obj})
 
@@ -398,7 +611,7 @@ def api_ai_query():
     # 2. Jika dikirim payload vehicle_data langsung (misalnya dari simulasi Postman atau tombol analisis aktif)
     elif isinstance(custom_vehicle, dict) and custom_vehicle:
         jenis = str(custom_vehicle.get("jenis_kendaraan") or "mobil").lower().strip()
-        golongan = str(custom_vehicle.get("golongan") or MAP_GOLONGAN.get(jenis, "A")).upper().strip()
+        golongan = normalize_golongan(custom_vehicle.get("golongan"), jenis)
         berat_gram = float(custom_vehicle.get("berat_aktual_gram", 0))
         panjang_cm = float(custom_vehicle.get("panjang_cm", 0))
         tinggi_cm = float(custom_vehicle.get("tinggi_cm", 0))
@@ -434,11 +647,17 @@ def api_ai_query():
         }), 400
 
     try:
-        rag_result = generate_answer(question=query, vehicle_data=vehicle_data)
+        rag_result = rag_service.generate_answer(question=query, vehicle_data=vehicle_data)
         mode_konsultasi = "analisis_kendaraan" if vehicle_data else "chat_umum"
+        title = (
+            f"Analisis Kendaraan {vehicle_data.get('id_pemeriksaan', '')}".strip()
+            if vehicle_data
+            else "Konsultasi Regulasi & SOP FERQUEUE"
+        )
         return jsonify({
             "status": "success",
             "mode": mode_konsultasi,
+            "title": title,
             "vehicle": vehicle_data,
             "summary": rag_result["answer"],
             "sources": rag_result["sources"],
@@ -452,4 +671,8 @@ def api_ai_query():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(
+        host=os.getenv("WEB_HOST", "0.0.0.0"),
+        port=int(os.getenv("WEB_PORT", "5000")),
+        debug=os.getenv("FLASK_DEBUG", "0") == "1",
+    )

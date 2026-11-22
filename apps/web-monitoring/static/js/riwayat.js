@@ -201,22 +201,39 @@ async function fetchFromApi() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/tiket`);
     if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        // Gabungkan tiket baru di depan
-        const mapped = data.map((t, idx) => ({
-          nomor: t.nomor || `FQ-2N261117-W${String(idx + 10).padStart(3, '0')}`,
-          date: '17 Nov 2026',
-          time: new Date(t.waktu || Date.now()).toLocaleTimeString('en-GB', { hour12: false }) + ' WIB',
-          pengemudi: t.pengemudi || 'Pengemudi',
-          initial: (t.pengemudi || 'P').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
-          petugas: 'Rian Setiawan',
-          golongan: t.golongan ? `Gol ${t.golongan}` : 'Gol V A',
-          p: t.P ? `${t.P}m` : '7.2m',
-          t: t.T ? `${t.T}m` : '3.1m',
-          berat: `${formatNumber(Math.round(t.berat || t.berat_gram || 8450))} kg`,
-          status: (t.status || '').toLowerCase().includes('over') ? 'Overdimension' : 'Normal'
-        }));
+      const payload = await res.json();
+      const rows = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
+      if (rows.length > 0) {
+        const mapped = rows.map((t, idx) => {
+          const driver = t.nama_pengemudi || t.pengemudi || 'Pengemudi';
+          const rawTime = t.waktu_pemeriksaan || t.waktu || Date.now();
+          const dt = new Date(typeof rawTime === 'string' ? rawTime.replace(' ', 'T') : rawTime);
+          const validDate = !Number.isNaN(dt.getTime());
+          const dateStr = validDate
+            ? dt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'Hari ini';
+          const timeStr = validDate
+            ? dt.toLocaleTimeString('en-GB', { hour12: false }) + ' WIB'
+            : '-';
+          const pVal = t.panjang_cm ?? t.P;
+          const tVal = t.tinggi_cm ?? t.T;
+          const beratVal = Number(t.berat_aktual_gram ?? t.berat_gram ?? t.berat ?? 0);
+          const isOver = String(t.status || '').toLowerCase().includes('over');
+
+          return {
+            nomor: t.nomor_tiket || t.nomor || t.id_pemeriksaan || `CHK-${String(idx + 1).padStart(3, '0')}`,
+            date: dateStr,
+            time: timeStr,
+            pengemudi: driver,
+            initial: driver.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'OP',
+            petugas: 'Petugas Gate',
+            golongan: t.golongan ? `Gol ${t.golongan}` : 'Gol A',
+            p: pVal !== undefined && pVal !== null ? `${Number(pVal).toFixed(1)} cm` : '—',
+            t: tVal !== undefined && tVal !== null ? `${Number(tVal).toFixed(1)} cm` : '—',
+            berat: `${beratVal.toFixed(1).replace('.', ',')} g`,
+            status: isOver ? 'Overweight' : 'Normal',
+          };
+        });
         items = [...mapped, ...DEFAULT_ROWS];
       }
     }

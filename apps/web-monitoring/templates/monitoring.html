@@ -208,20 +208,28 @@
           <span class="card__badge-num">02</span>
           Timbangan Berat Kendaraan
         </h2>
-        <span class="mon-weight-header-right">Sensor Timbangan OK</span>
+        <span class="mon-weight-header-right" id="sensor-status-label">Sensor Timbangan OK</span>
       </div>
       <div class="card__body">
         <div class="mon-weight-val-row">
-          <span class="mon-weight-num" id="weight-display">8.450</span>
-          <span class="mon-weight-unit">kg</span>
+          <span class="mon-weight-num" id="weight-display">0,0</span>
+          <span class="mon-weight-unit" id="weight-unit">g</span>
         </div>
         <div class="mon-weight-bar">
-          <div class="mon-weight-bar-fill" id="weight-bar" style="width: 35%;"></div>
+          <div class="mon-weight-bar-fill" id="weight-bar" style="width: 5%;"></div>
         </div>
         <div class="mon-weight-limits">
-          <span>0 t</span>
-          <span>3.5t Ambang Batas</span>
-          <span>25.0 t Maks.</span>
+          <span>0 g</span>
+          <span id="weight-limit-label">Batas Gol. A: 55 g</span>
+          <span>150 g Maks.</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" class="btn btn--outline" id="btn-buka-gerbang" style="flex: 1; justify-content: center; font-size: 12px; padding: 7px 10px;">
+            Buka Gerbang
+          </button>
+          <button type="button" class="btn btn--outline" id="btn-tare-sensor" style="flex: 1; justify-content: center; font-size: 12px; padding: 7px 10px;">
+            Tare (Nol-kan)
+          </button>
         </div>
       </div>
     </div>
@@ -313,7 +321,7 @@
       <div class="card__body" style="padding: 14px 16px;">
         <div id="llm-advisory-box">
           <p style="font-size: 12px; line-height: 1.5; color: #374151; margin-bottom: 10px;" id="llm-advisory-text">
-            <strong>Analisis Regulasi (PM 59/2022):</strong> Dimensi optik dan tonase berada dalam batas toleransi legal. Palang portal aman dibuka untuk penerbitan tiket.
+            <strong>Analisis Regulasi (PM 103/2017):</strong> Berat muatan berada dalam batas toleransi golongan. Palang portal aman dibuka untuk penerbitan tiket.
           </p>
           <a href="/ai-assistant" class="btn btn--outline" style="width: 100%; font-size: 11.5px; padding: 7px 12px; justify-content: center; background: #ffffff; border-color: #D8B4FE; color: #6B21A8; font-weight: 600;">
             Buka Workspace Audit LLM &rarr;
@@ -400,7 +408,7 @@
         </div>
         <div class="ticket-receipt__row">
           <span class="ticket-receipt__lbl">Berat Timbangan</span>
-          <span class="ticket-receipt__val ticket-receipt__val--mono" id="modal-weight">8.450 kg</span>
+          <span class="ticket-receipt__val ticket-receipt__val--mono" id="modal-weight">0,0 g</span>
         </div>
         <div class="ticket-receipt__row">
           <span class="ticket-receipt__lbl">Status Kepatuhan</span>

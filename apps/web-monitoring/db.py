@@ -5,7 +5,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 import pymysql
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 BASE_DIR = Path(__file__).resolve().parent
 env_path = BASE_DIR / ".env" if (BASE_DIR / ".env").exists() else BASE_DIR.parents[1] / ".env"

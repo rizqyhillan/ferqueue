@@ -12,23 +12,72 @@ const $ = s => document.querySelector(s);
 const DEFAULT_DEMO_PANJANG = 720; // cm
 const DEFAULT_DEMO_TINGGI = 320;  // cm
 
-// State monitoring (default initial state persis sesuai Screenshot 2)
+const GOLONGAN_META = {
+  A: { code: 'GOL. A', desc: 'Kendaraan Penumpang (Mobil)', limit: 55, tarif: 60000, jenis: 'mobil' },
+  B: { code: 'GOL. B', desc: 'Kendaraan Angkutan Penumpang (Bus)', limit: 85, tarif: 120000, jenis: 'bus' },
+  C: { code: 'GOL. C', desc: 'Kendaraan Angkutan Barang (Truk)', limit: 100, tarif: 250000, jenis: 'truk' },
+};
+
+// State monitoring (satuan berat: gram sesuai load cell prototipe & aturan PM 103/2017)
 const state = {
-  weight: 8450,          // Satuan kg
-  vehicleType: 'Truk Sedang Boks (Golongan V-A)',
+  weight: 0.0,           // Satuan gram
+  weightLimit: 55.0,     // Batas maksimum golongan (gram)
+  vehicleKind: 'mobil',  // 'mobil' | 'bus' | 'truk'
+  vehicleType: 'Mobil (Golongan A)',
   panjang: DEFAULT_DEMO_PANJANG, // cm
   tinggi: DEFAULT_DEMO_TINGGI,   // cm
   cameraDimensionsActive: false,
-  golongan: 'GOL. V-A',
-  golonganDesc: 'Kendaraan Barang Sedang',
-  status: 'Normal / Lolos',
-  tarif: 642000,
-  sensorLive: true,
+  golonganCode: 'A',
+  golongan: 'GOL. A',
+  golonganDesc: 'Kendaraan Penumpang (Mobil)',
+  status: 'Normal',
+  gerbang: 'tutup',
+  tarif: 60000,
+  sensorLive: false,
   stream: null,
   imageUrl: null,
   cameraMode: 'demo',    // 'demo' | 'live' | 'upload'
   cvActive: false,
 };
+
+function formatGram(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '0,0';
+  return num.toFixed(1).replace('.', ',');
+}
+
+function applyGolonganMeta(code) {
+  const key = String(code || 'A').toUpperCase().replace(/^GOL\.?\s*/, '').trim();
+  const meta = GOLONGAN_META[key] || GOLONGAN_META.A;
+  state.golonganCode = key in GOLONGAN_META ? key : 'A';
+  state.golongan = meta.code;
+  state.golonganDesc = meta.desc;
+  state.weightLimit = meta.limit;
+  state.tarif = meta.tarif;
+  state.vehicleKind = meta.jenis;
+}
+
+function mapClassNameToGolongan(className) {
+  const lower = String(className || '').toLowerCase();
+  if (lower.includes('truk') || lower.includes('truck')) return 'C';
+  if (lower.includes('bus')) return 'B';
+  if (lower.includes('mobil') || lower.includes('car')) return 'A';
+  return null;
+}
+
+function syncSensorStateToBackend() {
+  const payload = {
+    jenis: state.vehicleKind,
+    golongan: state.golonganCode,
+  };
+  if (Number.isFinite(state.panjang)) payload.P = state.panjang;
+  if (Number.isFinite(state.tinggi)) payload.T = state.tinggi;
+  fetch(`${API_BASE_URL}/api/sensor/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
 
 function formatDimCm(value) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -75,13 +124,25 @@ function updateClocks() {
 }
 
 function renderUI() {
-  // Update berat
+  // Update berat (satuan gram)
   const weightEl = document.getElementById('weight-display');
-  if (weightEl) weightEl.textContent = formatNumber(Math.round(state.weight));
+  if (weightEl) weightEl.textContent = formatGram(state.weight);
+
+  const weightLimitLabel = document.getElementById('weight-limit-label');
+  if (weightLimitLabel) {
+    weightLimitLabel.textContent = `Batas ${state.golongan}: ${state.weightLimit} g`;
+  }
+
+  const sensorLabel = document.getElementById('sensor-status-label');
+  if (sensorLabel) {
+    sensorLabel.textContent = state.sensorLive
+      ? `Sensor Aktif · Gerbang: ${state.gerbang}`
+      : 'Menunggu Sensor ESP32';
+  }
 
   const weightBar = document.getElementById('weight-bar');
   if (weightBar) {
-    const pct = Math.min(100, Math.max(5, (state.weight / 25000) * 100));
+    const pct = Math.min(100, Math.max(0, (state.weight / 150) * 100));
     weightBar.style.width = `${pct}%`;
   }
 
@@ -109,13 +170,13 @@ function renderUI() {
   const classDesc = document.getElementById('class-desc');
   if (classDesc) classDesc.textContent = state.golonganDesc;
 
-  // Status Lolos / Overdimension
-  const isOver = state.status.toLowerCase().includes('over');
+  // Status Lolos / Overweight
+  const isOver = state.status.toLowerCase().includes('over') || state.weight > state.weightLimit;
   const statusPill = document.getElementById('det-status-pill');
   if (statusPill) {
     statusPill.className = isOver ? 'mon-status-pill is-danger' : 'mon-status-pill';
     statusPill.innerHTML = isOver
-      ? `<span>⚠ Overdimension</span>`
+      ? `<span>⚠ Overweight</span>`
       : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg><span>Normal / Lolos</span>`;
   }
 
@@ -136,28 +197,30 @@ function renderUI() {
   const llmCard = document.getElementById('mon-llm-card');
   if (llmText && llmCard) {
     if (isOver) {
+      const kelebihan = Math.max(0, state.weight - state.weightLimit).toFixed(1).replace('.', ',');
       llmCard.style.borderColor = '#FCA5A5';
       llmCard.style.background = '#FEF2F2';
-      llmText.innerHTML = `<strong>PERINGATAN ODOL (PM 59/2022):</strong> Terdeteksi pelanggaran dimensi/muatan melebihi batas toleransi. <em>Rekomendasi Tindakan:</em> Tahan palang (SERVO_LOCK), arahkan pengemudi ke U-Turn bay, dan terbitkan Berita Acara penolakan.`;
+      llmText.innerHTML = `<strong>PERINGATAN OVERWEIGHT (PM 103/2017):</strong> Berat melebihi batas ${state.golongan} (+${kelebihan} g). <em>Tindakan:</em> Tiket masuk tidak diterbitkan (Pasal 5), arahkan ke jalur keluar pelabuhan (Pasal 6) &amp; konsultasikan di Workspace AI.`;
     } else {
       llmCard.style.borderColor = '#E9D5FF';
       llmCard.style.background = '#FAF5FF';
-      llmText.innerHTML = `<strong>Analisis Regulasi (PM 59/2022):</strong> Dimensi optik dan tonase berada dalam batas toleransi legal. Palang portal aman dibuka untuk penerbitan tiket.`;
+      llmText.innerHTML = `<strong>Analisis Regulasi (PM 103/2017):</strong> Berat muatan (${formatGram(state.weight)} g / batas ${state.weightLimit} g) berada dalam batas toleransi legal. Palang portal aman dibuka untuk penerbitan tiket.`;
     }
   }
 }
 
-// Polling data timbangan dari backend IoT
+// Polling data timbangan dari backend IoT (satuan gram)
 async function pollSensor() {
   try {
     const res = await fetch(`${API_BASE_URL}/api/berat`);
     if (res.ok) {
       const data = await res.json();
-      if (data.berat_kg !== undefined && data.berat_kg > 0) {
-        state.weight = data.berat_kg;
-      } else if (data.berat !== undefined && data.berat > 0) {
-        state.weight = Math.round(data.berat / 1000);
+      const gram = Number(data.berat_gram ?? data.berat);
+      if (Number.isFinite(gram)) {
+        state.weight = gram;
       }
+      if (data.gerbang) state.gerbang = data.gerbang;
+      state.sensorLive = Boolean(data.waktu);
     }
 
     const stRes = await fetch(`${API_BASE_URL}/api/status-kendaraan`);
@@ -169,7 +232,9 @@ async function pollSensor() {
         if (Number.isFinite(pVal) && pVal > 0) state.panjang = Number(pVal.toFixed(2));
         if (Number.isFinite(tVal) && tVal > 0) state.tinggi = Number(tVal.toFixed(2));
       }
-      if (stData.golongan && stData.golongan !== '-') state.golongan = `GOL. ${stData.golongan}`;
+      if (stData.golongan && stData.golongan !== '-') {
+        applyGolonganMeta(stData.golongan);
+      }
       if (stData.status) state.status = stData.status;
     }
   } catch (err) {
@@ -224,12 +289,12 @@ function showTicketModal(ticket) {
   if (elDims) elDims.textContent = formatDimPair(state.panjang, state.tinggi);
 
   const elWeight = document.getElementById('modal-weight');
-  const weightKg = formatNumber(Math.round(ticket.berat || state.weight));
-  if (elWeight) elWeight.textContent = `${weightKg} kg`;
+  const weightGram = formatGram(ticket.berat_gram ?? ticket.berat ?? state.weight);
+  if (elWeight) elWeight.textContent = `${weightGram} g`;
 
   const elStatus = document.getElementById('modal-status');
   if (elStatus) {
-    elStatus.textContent = isOver ? 'OVERDIMENSION (PELANGGARAN)' : 'Normal / Lolos Limit';
+    elStatus.textContent = isOver ? 'OVERWEIGHT (PELANGGARAN)' : 'Normal / Lolos Limit';
     elStatus.className = isOver ? 'ticket-receipt__val ticket-receipt__val--status is-danger' : 'ticket-receipt__val ticket-receipt__val--status';
   }
 
@@ -254,7 +319,7 @@ function showTicketModal(ticket) {
     if (totalBox) totalBox.style.display = 'none';
     if (violationBox) violationBox.style.display = 'block';
     if (violationDesc) {
-      violationDesc.innerHTML = `Kendaraan terdeteksi <strong>Over Dimension / Over Load (ODOL)</strong>: P: ${formatDimShort(state.panjang, preferCm)} | T: ${formatDimShort(state.tinggi, preferCm)} | Berat: ${weightKg}kg melebihi batas legal PM 59/2022.<br><br><strong>Instruksi Petugas Lapangan:</strong> Palang gerbang utama DITUTUP. Pengemudi wajib membawa lembar disposisi ini ke <strong>Pos Jalur Inspeksi Fisik (U-Turn Bay) Gate #03</strong> untuk verifikasi manual pita ukur oleh petugas pengawas.`;
+      violationDesc.innerHTML = `Kendaraan terdeteksi <strong>Overweight</strong>: P: ${formatDimShort(state.panjang, preferCm)} | T: ${formatDimShort(state.tinggi, preferCm)} | Berat: ${weightGram} g melebihi batas ${state.golongan} (${state.weightLimit} g) sesuai PM 103/2017.<br><br><strong>Instruksi Petugas Lapangan:</strong> Tiket masuk tidak diterbitkan (Pasal 5). Gerbang dibuka khusus untuk <strong>Jalur Keluar / Putar Balik (Pasal 6)</strong> agar pengemudi menurunkan kelebihan muatan di luar pelabuhan.`;
     }
     if (printBtn) printBtn.className = 'btn btn--danger';
     if (printText) printText.textContent = 'Cetak Tiket Pelanggaran';
@@ -331,8 +396,12 @@ async function issueTicket(e) {
   try {
     const payload = {
       pengemudi: driver,
-      golongan: state.golongan,
+      jenis_kendaraan: state.vehicleKind,
+      golongan: state.golonganCode,
       berat: state.weight,
+      berat_gram: state.weight,
+      panjang_cm: Number.isFinite(state.panjang) ? state.panjang : 0,
+      tinggi_cm: Number.isFinite(state.tinggi) ? state.tinggi : 0,
       status: state.status,
     };
 
@@ -345,14 +414,12 @@ async function issueTicket(e) {
     if (res.ok) {
       const json = await res.json();
       ticketData = json.tiket;
+      const ticketOver = String(ticketData?.status || state.status).toLowerCase().includes('over');
 
-      if (isOver) {
-        // JIKA PELANGGARAN: Jangan buka palang! Beri peringatan
-        toast('Kendaraan terindikasi ODOL! Tiket pelanggaran diterbitkan untuk inspeksi fisik.', 'warning');
+      if (ticketOver) {
+        toast('Kendaraan OVERWEIGHT! Tiket ditolak (Pasal 5), gerbang dibuka untuk jalur keluar (Pasal 6).', 'warning');
       } else {
-        // JIKA NORMAL: Buka palang gerbang
         toast('Tiket resmi diterbitkan! Barrier gerbang dibuka.', 'success');
-        fetch(`${API_BASE_URL}/api/buka`, { method: 'POST' }).catch(() => {});
       }
     } else {
       toast('Tiket diterbitkan (mode lokal).', 'info');
@@ -368,7 +435,8 @@ async function issueTicket(e) {
       pengemudi: driver,
       golongan: state.golongan,
       berat: state.weight,
-      status: state.status,
+      berat_gram: state.weight,
+      status: isOver ? 'Overweight' : 'Normal',
       waktu: new Date().toISOString(),
     });
   }
@@ -385,6 +453,32 @@ function init() {
 
   const form = document.getElementById('ticket-form');
   if (form) form.addEventListener('submit', issueTicket);
+
+  // Tombol kontrol gerbang & tare load cell ESP32
+  document.getElementById('btn-buka-gerbang')?.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/buka`, { method: 'POST' });
+      if (res.ok) toast('Perintah BUKA gerbang dikirim ke ESP32.', 'success');
+      else toast('Gagal mengirim perintah buka gerbang.', 'warning');
+    } catch {
+      toast('Server tidak terjangkau untuk membuka gerbang.', 'warning');
+    }
+  });
+
+  document.getElementById('btn-tare-sensor')?.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tare`, { method: 'POST' });
+      if (res.ok) {
+        state.weight = 0.0;
+        renderUI();
+        toast('Perintah TARE dikirim. Timbangan di-nolkan.', 'info');
+      } else {
+        toast('Gagal mengirim perintah tare.', 'warning');
+      }
+    } catch {
+      toast('Server tidak terjangkau untuk tare sensor.', 'warning');
+    }
+  });
 
   // Trigger Enter pada input driver untuk langsung memunculkan pop-up tiket
   const driverInput = document.getElementById('driver-name');
@@ -641,7 +735,7 @@ function init() {
     });
   }
 
-  // Update dimensi panjang & tinggi dari kalibrasi koin 50 yen
+  // Update dimensi panjang & tinggi dari kalibrasi kamera (trigonometri / koin 50 yen)
   window.addEventListener('ferqueue:camera-measurement', (e) => {
     const active = Boolean(e.detail?.active);
     const estimate = e.detail?.estimate;
@@ -649,6 +743,7 @@ function init() {
     if (estimate && Number.isFinite(estimate.length_cm) && Number.isFinite(estimate.height_cm)) {
       state.panjang = Number(estimate.length_cm.toFixed(2));
       state.tinggi = Number(estimate.height_cm.toFixed(2));
+      syncSensorStateToBackend();
     } else if (active || state.cameraMode !== 'demo') {
       state.panjang = null;
       state.tinggi = null;
@@ -670,6 +765,11 @@ function init() {
     } else if (data?.detections?.length) {
       const classes = [...new Set(data.detections.map((item) => item.class_name))];
       state.vehicleType = classes.join(', ');
+      const mappedGol = mapClassNameToGolongan(data.detections[0].class_name);
+      if (mappedGol) {
+        applyGolonganMeta(mappedGol);
+        syncSensorStateToBackend();
+      }
     } else {
       state.vehicleType = 'Belum ada kendaraan terdeteksi';
     }

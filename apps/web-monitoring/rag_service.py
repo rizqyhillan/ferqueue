@@ -1,10 +1,12 @@
 import json
 import os
 from pathlib import Path
-import chromadb
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 BASE_DIR = Path(__file__).resolve().parent
 env_path = BASE_DIR / ".env" if (BASE_DIR / ".env").exists() else BASE_DIR.parents[1] / ".env"
@@ -15,16 +17,51 @@ LLM_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 MAX_DISTANCE = float(os.getenv("RAG_MAX_DISTANCE", "0.50"))
 
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise RuntimeError(f"GEMINI_API_KEY tidak ditemukan. Pastikan file .env ada di {env_path}")
+_client = None
+_collection = None
 
-client = genai.Client(api_key=api_key)
-chroma = chromadb.PersistentClient(path=str(CHROMA_DIR))
-collection = chroma.get_or_create_collection(
-    name="ferqueue_knowledge",
-    metadata={"hnsw:space": "cosine"},
-)
+
+def _get_genai_client():
+    global _client
+    if _client is not None:
+        return _client
+
+    try:
+        from google import genai
+    except ImportError as exc:
+        raise RuntimeError(
+            "Paket 'google-genai' belum terpasang. Jalankan: pip install -r apps/web-monitoring/requirements.txt"
+        ) from exc
+
+    load_dotenv(dotenv_path=env_path)
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            f"GEMINI_API_KEY tidak ditemukan. Pastikan file .env ada di {env_path}"
+        )
+
+    _client = genai.Client(api_key=api_key)
+    return _client
+
+
+def _get_collection():
+    global _collection
+    if _collection is not None:
+        return _collection
+
+    try:
+        import chromadb
+    except ImportError as exc:
+        raise RuntimeError(
+            "Paket 'chromadb' belum terpasang. Jalankan: pip install -r apps/web-monitoring/requirements.txt"
+        ) from exc
+
+    chroma = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    _collection = chroma.get_or_create_collection(
+        name="ferqueue_knowledge",
+        metadata={"hnsw:space": "cosine"},
+    )
+    return _collection
 
 SYSTEM_PROMPT = """
 Kamu adalah FERQUEUE AI Assistant untuk petugas operasional gerbang pelabuhan penyeberangan.
@@ -51,6 +88,12 @@ ATURAN KETAT (ANTI-HALUSINASI):
 
 
 def retrieve_documents(query: str, top_k: int = 3) -> list[dict]:
+    client = _get_genai_client()
+    collection = _get_collection()
+
+    if collection.count() == 0:
+        return []
+
     emb_res = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=query,
@@ -59,7 +102,7 @@ def retrieve_documents(query: str, top_k: int = 3) -> list[dict]:
 
     results = collection.query(
         query_embeddings=[query_vector],
-        n_results=top_k,
+        n_results=min(top_k, collection.count()),
         include=["documents", "metadatas", "distances"],
     )
 
@@ -112,6 +155,9 @@ def generate_answer(question: str, vehicle_data: dict | None = None) -> dict:
             f"PERTANYAAN PETUGAS:\n{question}"
         )
 
+    from google.genai import types
+
+    client = _get_genai_client()
     response = client.models.generate_content(
         model=LLM_MODEL,
         contents=payload,
@@ -135,7 +181,7 @@ if __name__ == "__main__":
     print(f"LLM Model      : {LLM_MODEL}")
     print(f"Embedding Model: {EMBEDDING_MODEL}")
     print(f"Chroma DB Path : {CHROMA_DIR}")
-    print(f"Chroma Total   : {collection.count()} chunks tersimpan")
+    print(f"Chroma Total   : {_get_collection().count()} chunks tersimpan")
     print("=" * 60)
 
     test_q = sys.argv[1] if len(sys.argv) > 1 else "Berapa batas berat maksimum untuk Golongan A, B, dan C?"
