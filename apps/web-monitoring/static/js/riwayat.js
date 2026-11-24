@@ -91,35 +91,70 @@ let items = [...DEFAULT_ROWS];
 let currentPage = 1;
 const PER_PAGE = 6;
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function openPhotoDialog(item) {
+  const dialog = document.getElementById('photo-preview-dialog');
+  const img = document.getElementById('photo-dialog-img');
+  const title = document.getElementById('photo-dialog-title');
+  const meta = document.getElementById('photo-dialog-meta');
+  if (!dialog || !img || !item?.foto_url) return;
+
+  img.src = item.foto_url;
+  img.alt = `Foto kendaraan ${item.nomor}`;
+  if (title) title.textContent = `${item.nomor} · ${item.pengemudi}`;
+  if (meta) meta.textContent = `${item.golongan} · P: ${item.p} × T: ${item.t} · Berat: ${item.berat} · ${item.status}`;
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute('open', '');
+  }
+}
+
 function renderTable(data) {
   const tbody = document.getElementById('riwayat-tbody');
   if (!tbody) return;
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:#94A3B8;">Tidak ada transaksi ditemukan</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#94A3B8;">Tidak ada transaksi ditemukan</td></tr>';
     return;
   }
 
-  tbody.innerHTML = data.map(r => {
+  tbody.innerHTML = data.map((r, idx) => {
     const isOver = r.status.toLowerCase().includes('over');
     const avatarClass = isOver ? 'cell-avatar cell-avatar--red' : 'cell-avatar';
     const dimsClass = isOver ? 'cell-dims is-danger' : 'cell-dims';
     const beratClass = isOver ? 'cell-berat is-danger' : 'cell-berat';
+    const statusLabel = escapeHtml(r.status);
     const statusPill = isOver
-      ? '<span class="pill-status-over">⚠ Overdimension</span>'
+      ? `<span class="pill-status-over">⚠ ${statusLabel}</span>`
       : '<span class="pill-status-normal">✓ Normal</span>';
+
+    const photoCell = r.foto_url
+      ? `<button type="button" class="cell-photo-btn" data-photo-idx="${idx}" title="Klik untuk perbesar foto">
+           <img class="cell-photo-thumb" src="${escapeHtml(r.foto_url)}" alt="Foto ${escapeHtml(r.nomor)}" loading="lazy" />
+         </button>`
+      : '<span class="cell-photo-empty" title="Tidak ada foto">—</span>';
 
     return `
       <tr>
-        <td><span class="cell-ticket-no">${r.nomor}</span></td>
+        <td>${photoCell}</td>
+        <td><span class="cell-ticket-no">${escapeHtml(r.nomor)}</span></td>
         <td>
-          <div class="cell-time-date">${r.date}</div>
-          <div class="cell-time-hour">${r.time}</div>
+          <div class="cell-time-date">${escapeHtml(r.date)}</div>
+          <div class="cell-time-hour">${escapeHtml(r.time)}</div>
         </td>
         <td>
           <div class="cell-driver">
-            <div class="${avatarClass}">${r.initial}</div>
-            <span>${r.pengemudi}</span>
+            <div class="${avatarClass}">${escapeHtml(r.initial)}</div>
+            <span>${escapeHtml(r.pengemudi)}</span>
           </div>
         </td>
         <td>
@@ -127,19 +162,28 @@ function renderTable(data) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
             </svg>
-            <span>${r.petugas}</span>
+            <span>${escapeHtml(r.petugas)}</span>
           </div>
         </td>
-        <td><span class="cell-golongan-pill">${r.golongan}</span></td>
+        <td><span class="cell-golongan-pill">${escapeHtml(r.golongan)}</span></td>
         <td>
-          <div class="${dimsClass}">P: ${r.p}</div>
-          <div class="${dimsClass}">T: ${r.t}</div>
+          <div class="${dimsClass}">P: ${escapeHtml(r.p)}</div>
+          <div class="${dimsClass}">T: ${escapeHtml(r.t)}</div>
         </td>
-        <td><span class="${beratClass}">${r.berat}</span></td>
+        <td><span class="${beratClass}">${escapeHtml(r.berat)}</span></td>
         <td>${statusPill}</td>
       </tr>
     `;
   }).join('');
+
+  tbody.querySelectorAll('.cell-photo-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.photoIdx);
+      if (Number.isInteger(idx) && data[idx]) {
+        openPhotoDialog(data[idx]);
+      }
+    });
+  });
 }
 
 function renderPagination(total, page) {
@@ -232,6 +276,7 @@ async function fetchFromApi() {
             t: tVal !== undefined && tVal !== null ? `${Number(tVal).toFixed(1)} cm` : '—',
             berat: `${beratVal.toFixed(1).replace('.', ',')} g`,
             status: isOver ? 'Overweight' : 'Normal',
+            foto_url: t.foto_url || null,
           };
         });
         items = [...mapped, ...DEFAULT_ROWS];
@@ -250,6 +295,14 @@ function init() {
   setInterval(updateClock, 1000);
 
   fetchFromApi();
+
+  const photoDialog = document.getElementById('photo-preview-dialog');
+  document.getElementById('btn-close-photo-dialog')?.addEventListener('click', () => {
+    photoDialog?.close();
+  });
+  photoDialog?.addEventListener('click', (e) => {
+    if (e.target === photoDialog) photoDialog.close();
+  });
 
   document.getElementById('search-input')?.addEventListener('input', filterData);
   document.getElementById('filter-golongan')?.addEventListener('change', filterData);

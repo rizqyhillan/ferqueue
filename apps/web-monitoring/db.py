@@ -30,6 +30,26 @@ DB_CONFIG = {
 
 _last_db_error_time = 0
 DB_RETRY_INTERVAL = 15
+_foto_column_checked = False
+
+
+def _ensure_foto_column(conn):
+    global _foto_column_checked
+    if _foto_column_checked:
+        return True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW COLUMNS FROM riwayat_pemeriksaan LIKE 'foto_url'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE riwayat_pemeriksaan "
+                    "ADD COLUMN foto_url VARCHAR(255) NULL AFTER status"
+                )
+        _foto_column_checked = True
+        return True
+    except Exception as e:
+        print(f"[DB WARNING] Tidak dapat memastikan kolom foto_url: {e}")
+        return False
 
 
 def is_mysql_port_open(host="127.0.0.1", port=3306, timeout=0.04):
@@ -85,6 +105,7 @@ def simpan_pemeriksaan(data: dict) -> bool:
         "berat_aktual_gram": float(data.get("berat_aktual_gram") if data.get("berat_aktual_gram") is not None else (data.get("berat_gram") or data.get("W", 0.0))),
         "batas_maksimum_gram": float(data.get("batas_maksimum_gram") if data.get("batas_maksimum_gram") is not None else data.get("batas_berat_gram", 55.0)),
         "status": "Overweight" if str(data.get("status", "")).lower().startswith("over") else "Normal",
+        "foto_url": data.get("foto_url") or None,
     }
 
     is_overweight = riwayat["status"] == "Overweight"
@@ -108,16 +129,28 @@ def simpan_pemeriksaan(data: dict) -> bool:
         return False
 
     try:
+        has_foto_col = _ensure_foto_column(conn)
         with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO riwayat_pemeriksaan (
-                    id_pemeriksaan, nomor_tiket, nama_pengemudi, jenis_kendaraan, golongan,
-                    panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status
-                ) VALUES (
-                    %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(jenis_kendaraan)s, %(golongan)s,
-                    %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s
-                )
-            """, riwayat)
+            if has_foto_col:
+                cur.execute("""
+                    INSERT INTO riwayat_pemeriksaan (
+                        id_pemeriksaan, nomor_tiket, nama_pengemudi, jenis_kendaraan, golongan,
+                        panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status, foto_url
+                    ) VALUES (
+                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(jenis_kendaraan)s, %(golongan)s,
+                        %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s, %(foto_url)s
+                    )
+                """, riwayat)
+            else:
+                cur.execute("""
+                    INSERT INTO riwayat_pemeriksaan (
+                        id_pemeriksaan, nomor_tiket, nama_pengemudi, jenis_kendaraan, golongan,
+                        panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status
+                    ) VALUES (
+                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(jenis_kendaraan)s, %(golongan)s,
+                        %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s
+                    )
+                """, riwayat)
             if detail:
                 cur.execute("""
                     INSERT INTO detail_overweight (

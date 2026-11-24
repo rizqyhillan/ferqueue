@@ -19,15 +19,19 @@ venv/
 !.env.example
 
 # Data and model artifacts
-data/raw/*
-data/processed/*
+data/*
 !data/raw/
-!data/processed/
+data/raw/*
 !data/raw/.gitkeep
-!data/processed/.gitkeep
 !data/raw/vehicles/
-data/raw/vehicles/**
+data/raw/vehicles/*
 !data/raw/vehicles/.gitkeep
+!data/processed/
+data/processed/*
+!data/processed/.gitkeep
+!data/inference/
+data/inference/*
+!data/inference/.gitkeep
 models/*
 !models/mobilenet/
 !models/.gitkeep
@@ -56,9 +60,8 @@ Thumbs.db
 *.log
 
 # Offline prediction inputs/results and local experiment artifacts
-data/inference/*
-!data/inference/.gitkeep
-data/vector_db/
+apps/web-monitoring/static/captures/*
+!apps/web-monitoring/static/captures/.gitkeep
 outputs/*
 !outputs/.gitkeep
 models/mobilenet/*

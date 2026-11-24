@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS riwayat_pemeriksaan (
     berat_aktual_gram DECIMAL(8, 2) NOT NULL,
     batas_maksimum_gram DECIMAL(8, 2) NOT NULL,
     status ENUM('Normal', 'Overweight') NOT NULL DEFAULT 'Normal',
+    foto_url VARCHAR(255) NULL COMMENT 'Path foto hasil tangkapan kamera saat verifikasi',
 
     INDEX idx_status (status),
     INDEX idx_waktu (waktu_pemeriksaan),

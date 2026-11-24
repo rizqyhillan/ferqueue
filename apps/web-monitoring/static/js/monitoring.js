@@ -347,6 +347,19 @@ function showTicketModal(ticket) {
   const barcodeBox = document.getElementById('modal-barcode-svg');
   generateBarcodeLines(barcodeBox);
 
+  // Tampilkan foto tangkapan kamera jika tersedia
+  const photoWrap = document.getElementById('modal-photo-wrap');
+  const photoImg = document.getElementById('modal-vehicle-photo');
+  if (photoWrap && photoImg) {
+    if (ticket.foto_url) {
+      photoImg.src = ticket.foto_url;
+      photoWrap.hidden = false;
+    } else {
+      photoImg.removeAttribute('src');
+      photoWrap.hidden = true;
+    }
+  }
+
   // Tampilkan Pop-up
   modal.classList.add('is-open');
   modal.setAttribute('aria-hidden', 'false');
@@ -379,14 +392,57 @@ function resetToInitialState() {
   toast('Sistem kembali ke posisi awal. Siap untuk kendaraan berikutnya.', 'info');
 }
 
-// Penerbitan Tiket & Buka Barrier (Instan & Responsif)
+let isIssuingTicket = false;
+
+// Ambil snapshot JPEG dari kamera live atau foto yang diunggah
+function captureVehiclePhoto() {
+  try {
+    let sourceEl = null;
+    let srcWidth = 0;
+    let srcHeight = 0;
+
+    if (state.cameraMode === 'live') {
+      const video = document.getElementById('camera-video');
+      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        sourceEl = video;
+        srcWidth = video.videoWidth;
+        srcHeight = video.videoHeight;
+      }
+    } else if (state.cameraMode === 'upload') {
+      const img = document.getElementById('camera-feed');
+      if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        sourceEl = img;
+        srcWidth = img.naturalWidth;
+        srcHeight = img.naturalHeight;
+      }
+    }
+
+    if (!sourceEl || !srcWidth || !srcHeight) return null;
+
+    const scale = Math.min(1, 960 / Math.max(srcWidth, srcHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(srcWidth * scale));
+    canvas.height = Math.max(1, Math.round(srcHeight * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(sourceEl, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } catch {
+    return null;
+  }
+}
+
+// Penerbitan Tiket, Foto Kendaraan & Buka Barrier (Instan & Responsif)
 async function issueTicket(e) {
   if (e) e.preventDefault();
+  if (isIssuingTicket) return;
+  isIssuingTicket = true;
 
   const driverInput = document.getElementById('driver-name');
   const driver = driverInput ? driverInput.value.trim() || 'Budi Santoso' : 'Budi Santoso';
 
-  const isOver = state.status.toLowerCase().includes('over') || state.status.toLowerCase().includes('langgar');
+  const isOver = state.status.toLowerCase().includes('over') || state.weight > state.weightLimit;
+  const capturedPhoto = captureVehiclePhoto();
 
   const btn = document.getElementById('btn-issue-ticket');
   if (btn) btn.disabled = true;
@@ -403,6 +459,7 @@ async function issueTicket(e) {
       panjang_cm: Number.isFinite(state.panjang) ? state.panjang : 0,
       tinggi_cm: Number.isFinite(state.tinggi) ? state.tinggi : 0,
       status: state.status,
+      foto: capturedPhoto,
     };
 
     const res = await fetch(`${API_BASE_URL}/api/tiket`, {
@@ -415,11 +472,12 @@ async function issueTicket(e) {
       const json = await res.json();
       ticketData = json.tiket;
       const ticketOver = String(ticketData?.status || state.status).toLowerCase().includes('over');
+      const photoNote = ticketData?.foto_url ? ' Foto tersimpan ke riwayat.' : '';
 
       if (ticketOver) {
-        toast('Kendaraan OVERWEIGHT! Tiket ditolak (Pasal 5), gerbang dibuka untuk jalur keluar (Pasal 6).', 'warning');
+        toast(`Kendaraan OVERWEIGHT! Tiket ditolak (Pasal 5), gerbang dibuka untuk jalur keluar (Pasal 6).${photoNote}`, 'warning');
       } else {
-        toast('Tiket resmi diterbitkan! Barrier gerbang dibuka.', 'success');
+        toast(`Tiket resmi diterbitkan & gerbang dibuka.${photoNote}`, 'success');
       }
     } else {
       toast('Tiket diterbitkan (mode lokal).', 'info');
@@ -427,6 +485,7 @@ async function issueTicket(e) {
   } catch (err) {
     toast('Tiket diterbitkan (mode offline).', 'info');
   } finally {
+    isIssuingTicket = false;
     if (btn) btn.disabled = false;
 
     // Tampilkan modal tiket pop-up seketika tanpa jeda
@@ -438,6 +497,7 @@ async function issueTicket(e) {
       berat_gram: state.weight,
       status: isOver ? 'Overweight' : 'Normal',
       waktu: new Date().toISOString(),
+      foto_url: capturedPhoto,
     });
   }
 }
@@ -510,6 +570,20 @@ function init() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal?.classList.contains('is-open')) {
       resetToInitialState();
+      return;
+    }
+
+    // Shortcut Enter global: foto kendaraan + terbitkan struk + buka gate
+    if (e.key === 'Enter' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+      if (modal?.classList.contains('is-open')) return;
+      const active = document.activeElement;
+      if (active && active.id === 'driver-name') return; // sudah ditangani listener #driver-name
+      const tag = active?.tagName?.toLowerCase();
+      if (tag === 'button' || tag === 'a' || tag === 'textarea' || tag === 'select' || tag === 'input') {
+        return;
+      }
+      e.preventDefault();
+      issueTicket(e);
     }
   });
 

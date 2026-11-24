@@ -149,6 +149,9 @@
       </span>
       <select class="riwayat-select" id="filter-golongan">
         <option value="">Semua Golongan</option>
+        <option value="Gol A">Golongan A (Mobil)</option>
+        <option value="Gol B">Golongan B (Bus)</option>
+        <option value="Gol C">Golongan C (Truk)</option>
         <option value="IV">Golongan IV</option>
         <option value="V">Golongan V</option>
         <option value="VI">Golongan VI</option>
@@ -169,6 +172,7 @@
       <select class="riwayat-select" id="filter-status">
         <option value="">Semua Status</option>
         <option value="Normal">Normal</option>
+        <option value="Overweight">Overweight</option>
         <option value="Overdimension">Overdimension</option>
       </select>
     </div>
@@ -182,6 +186,7 @@
       <table class="riwayat-table">
         <thead>
           <tr>
+            <th>FOTO</th>
             <th>NO. TIKET</th>
             <th>WAKTU VERIFIKASI</th>
             <th>NAMA PENGEMUDI</th>
@@ -207,6 +212,20 @@
     <!-- Populated by JS -->
   </div>
 </div>
+
+<!-- Lightbox Foto Kendaraan -->
+<dialog id="photo-preview-dialog" class="riwayat-photo-dialog" aria-labelledby="photo-dialog-title">
+  <div class="riwayat-photo-dialog__header">
+    <div>
+      <h3 id="photo-dialog-title" class="riwayat-photo-dialog__title">Foto Kendaraan</h3>
+      <p id="photo-dialog-meta" class="riwayat-photo-dialog__meta"></p>
+    </div>
+    <button type="button" id="btn-close-photo-dialog" class="riwayat-photo-dialog__close" aria-label="Tutup pratinjau foto">&times;</button>
+  </div>
+  <div class="riwayat-photo-dialog__body">
+    <img id="photo-dialog-img" alt="Foto tangkapan kendaraan" />
+  </div>
+</dialog>
 {% endblock %}
 
 {% block extra_js %}

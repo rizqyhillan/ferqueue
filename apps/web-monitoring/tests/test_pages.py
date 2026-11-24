@@ -1,6 +1,8 @@
+import base64
+from pathlib import Path
 import unittest
 from unittest.mock import patch
-from app import app, antrean_perintah, riwayat_pemeriksaan
+from app import app, antrean_perintah, riwayat_pemeriksaan, CAPTURES_DIR
 
 
 class WebMonitoringPagesTests(unittest.TestCase):
@@ -119,6 +121,44 @@ class WebMonitoringPagesTests(unittest.TestCase):
             prob = self.client.get('/api/kendaraan-bermasalah')
             self.assertEqual(prob.status_code, 200)
             self.assertEqual(prob.get_json()['total'], 1)
+
+    def test_ticket_saves_captured_photo_for_riwayat_and_opens_gate(self):
+        fake_jpeg = base64.b64encode(b'\xff\xd8\xff\xe0test-jpeg-bytes\xff\xd9').decode('ascii')
+        data_url = f'data:image/jpeg;base64,{fake_jpeg}'
+        saved_path = None
+        try:
+            with patch('app.simpan_pemeriksaan', return_value=False), \
+                 patch('app.ambil_semua_riwayat', return_value=[]):
+                res = self.client.post('/api/tiket', json={
+                    'pengemudi': 'Siti',
+                    'golongan': 'A',
+                    'berat_gram': 42.0,
+                    'panjang_cm': 11.4,
+                    'tinggi_cm': 4.8,
+                    'foto': data_url,
+                })
+                self.assertEqual(res.status_code, 200)
+                tiket = res.get_json()['tiket']
+                foto_url = tiket.get('foto_url')
+                self.assertIsNotNone(foto_url)
+                self.assertTrue(foto_url.startswith('/static/captures/'))
+
+                saved_path = CAPTURES_DIR / Path(foto_url).name
+                self.assertTrue(saved_path.exists())
+                self.assertIn('buka', antrean_perintah)
+
+                # Foto bisa diakses lewat URL statis & muncul di API riwayat
+                img_res = self.client.get(foto_url)
+                self.assertEqual(img_res.status_code, 200)
+                img_res.close()
+
+                riwayat_res = self.client.get('/api/tiket')
+                self.assertEqual(riwayat_res.status_code, 200)
+                rows = riwayat_res.get_json()['data']
+                self.assertEqual(rows[0]['foto_url'], foto_url)
+        finally:
+            if saved_path and saved_path.exists():
+                saved_path.unlink()
 
     def test_logout_clears_session(self):
         with self.client.session_transaction() as sess:

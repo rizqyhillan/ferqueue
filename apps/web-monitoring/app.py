@@ -1,4 +1,6 @@
+import base64
 import os
+import re
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -28,6 +30,10 @@ from db import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
+CAPTURES_DIR = BASE_DIR / "static" / "captures"
+MAX_CAPTURE_BYTES = 5 * 1024 * 1024
+_DATA_URL_RE = re.compile(r"^data:image/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=\s]+)$", re.IGNORECASE)
+_SAFE_ID_RE = re.compile(r"[^A-Za-z0-9_-]")
 env_path = BASE_DIR / ".env" if (BASE_DIR / ".env").exists() else BASE_DIR.parents[1] / ".env"
 load_dotenv(dotenv_path=env_path)
 
@@ -178,6 +184,43 @@ def generate_nomor_tiket() -> str:
 def queue_command(cmd: str) -> None:
     if cmd not in antrean_perintah:
         antrean_perintah.append(cmd)
+
+
+def save_capture_photo(id_pemeriksaan: str, photo_data_url: str | None) -> str | None:
+    """Decode base64 data URL dari kamera/upload dan simpan ke static/captures/."""
+    if not photo_data_url or not isinstance(photo_data_url, str):
+        return None
+    match = _DATA_URL_RE.match(photo_data_url.strip())
+    if not match:
+        return None
+    mime_ext, b64_payload = match.group(1).lower(), match.group(2)
+    ext = "jpg" if mime_ext in ("jpeg", "jpg") else mime_ext
+    try:
+        raw_bytes = base64.b64decode(b64_payload, validate=True)
+    except Exception:
+        return None
+    if not 0 < len(raw_bytes) <= MAX_CAPTURE_BYTES:
+        return None
+
+    safe_id = _SAFE_ID_RE.sub("", id_pemeriksaan) or generate_id_pemeriksaan()
+    CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{safe_id}.{ext}"
+    (CAPTURES_DIR / filename).write_bytes(raw_bytes)
+    return f"/static/captures/{filename}"
+
+
+def resolve_capture_url(record: dict) -> dict:
+    """Pastikan field foto_url terisi jika file tangkapan kamera ada di disk."""
+    item = dict(record)
+    if item.get("foto_url"):
+        return item
+    rec_id = _SAFE_ID_RE.sub("", str(item.get("id_pemeriksaan") or ""))
+    if rec_id and CAPTURES_DIR.exists():
+        for ext in ("jpg", "png", "webp"):
+            if (CAPTURES_DIR / f"{rec_id}.{ext}").exists():
+                item["foto_url"] = f"/static/captures/{rec_id}.{ext}"
+                break
+    return item
 
 
 # ==========================================================
@@ -446,6 +489,7 @@ def api_proses_kendaraan():
 
     id_pemeriksaan = generate_id_pemeriksaan()
     nomor_tiket = None if hasil["status"] == "Overweight" else generate_nomor_tiket()
+    foto_url = save_capture_photo(id_pemeriksaan, data.get("foto") or data.get("foto_base64"))
 
     rekam_data = {
         "id_pemeriksaan": id_pemeriksaan,
@@ -466,6 +510,7 @@ def api_proses_kendaraan():
         "status_tiket": hasil["status_tiket"],
         "status_gerbang": hasil["status_gerbang"],
         "tindakan": hasil["tindakan"],
+        "foto_url": foto_url,
     }
     riwayat_pemeriksaan.insert(0, rekam_data)
     simpan_pemeriksaan(rekam_data)
@@ -511,6 +556,7 @@ def api_tiket():
             if hasil["status"] == "Overweight"
             else f"FQ-{datetime.now().strftime('%y%m%d')}-{str(len(riwayat_pemeriksaan) + 1).zfill(3)}"
         )
+        foto_url = save_capture_photo(id_pemeriksaan, data.get("foto") or data.get("foto_base64"))
 
         rekam_data = {
             "id_pemeriksaan": id_pemeriksaan,
@@ -531,6 +577,7 @@ def api_tiket():
             "status_tiket": hasil["status_tiket"],
             "status_gerbang": hasil["status_gerbang"],
             "tindakan": hasil["tindakan"],
+            "foto_url": foto_url,
         }
         riwayat_pemeriksaan.insert(0, rekam_data)
         simpan_pemeriksaan(rekam_data)
@@ -553,17 +600,20 @@ def api_tiket():
             "persentase_kelebihan": hasil["persentase_kelebihan"],
             "id_pemeriksaan": id_pemeriksaan,
             "tarif": hasil["tarif"],
+            "foto_url": foto_url,
         }
         return jsonify({"status": "ok", "tiket": ticket_obj})
 
     data_db = ambil_semua_riwayat()
-    return jsonify({"status": "success", "data": data_db if data_db else riwayat_pemeriksaan})
+    records = data_db if data_db else riwayat_pemeriksaan
+    return jsonify({"status": "success", "data": [resolve_capture_url(r) for r in records]})
 
 
 @app.route("/api/riwayat", methods=["GET"])
 def api_riwayat():
     data_db = ambil_semua_riwayat()
-    return jsonify({"status": "success", "data": data_db if data_db else riwayat_pemeriksaan})
+    records = data_db if data_db else riwayat_pemeriksaan
+    return jsonify({"status": "success", "data": [resolve_capture_url(r) for r in records]})
 
 
 @app.route("/api/kendaraan-bermasalah", methods=["GET"])
