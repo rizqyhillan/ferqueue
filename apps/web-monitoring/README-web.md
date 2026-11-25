@@ -28,11 +28,11 @@ Tunggu **API siap**. Terminal kedua — Flask:
 
 Buka [dashboard](http://localhost:5000). Uji **Unggah** dahulu, lalu **Aktifkan kamera** dan izinkan akses kamera. Frame diperkecil hingga sisi terpanjang 640 piksel sebelum dikirim.
 
-### Ukur panjang dan tinggi dengan koin 50 yen
+### Ukur panjang dan tinggi dengan trigonometri geometri kamera
 
-1. Pasang kamera menghadap lurus ke sisi kendaraan di titik berhenti. Berdirikan koin 50 yen (diameter luar 21 mm) menghadap kamera, sebidang dengan sisi kendaraan, dan di luar kotak kendaraan. Seluruh tepi koin perlu terlihat di latar yang kontras.
-2. Buka kamera atau unggah foto tampak samping. Klik **Tandai koin 50 yen**, lalu klik dua sudut berlawanan di sekeliling koin. Beri sedikit ruang di semua tepi. PCV membaca diameter koin dari frame yang sama dengan kotak kendaraan.
-3. Saat ada satu kendaraan utuh, perkiraan panjang dan tinggi terisi otomatis dalam cm di panel kamera dan draf tiket. Tandai ulang area koin saat mengganti sumber gambar atau menggeser kamera.
+1. Ukur posisi kamera tetap terhadap titik kendaraan berhenti: **jarak tegak lurus (`d_perp`)** dan **geser samping (`d_parallel`)** dalam cm, lalu masukkan ke panel kalibrasi di halaman Monitoring.
+2. Letakkan objek acuan (misalnya penggaris/kartu) dengan lebar diketahui di titik kendaraan menghadap lensa, isi **Lebar acuan (cm)**, lalu klik **Kalibrasi acuan (2 titik)** dan klik kedua ujung objek acuan di gambar untuk menyimpan nilai fokus (`f_norm`).
+3. Saat ada satu kendaraan utuh terdeteksi, PCV menghitung perkiraan panjang dan tinggi otomatis dalam cm dengan koreksi sudut (`θ`) menggunakan geometri trigonometri.
 
 Untuk mencoba skala sebelum model kendaraan tersedia, jalankan PCV dengan `python pcv.py serve --calibration-only` dan jalankan Flask seperti biasa. Setelah model tersedia, jalankan ulang PCV memakai config model. Bandingkan hasil di kamera tetap dengan penggaris sebelum memakai perkiraan ukuran untuk pemeriksaan.
 

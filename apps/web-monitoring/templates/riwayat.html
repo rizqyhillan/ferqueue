@@ -20,10 +20,10 @@
   <div class="page-header-right">
     <div class="riwayat-header-clock-wrap">
       <span class="riwayat-live-api-badge">LIVE API Sync DB</span>
-      <span class="riwayat-header-clock" id="riwayat-clock">05:48:22 WIB</span>
+      <span class="riwayat-header-clock" id="riwayat-clock">--:--:-- WIB</span>
     </div>
     <!-- Print icon button -->
-    <button class="topbar__btn-icon" title="Cetak Ringkasan">
+    <button type="button" class="topbar__btn-icon" id="btn-print-riwayat" title="Cetak Ringkasan">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <polyline points="6 9 6 2 18 2 18 9"/>
         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
@@ -31,13 +31,13 @@
       </svg>
     </button>
     <!-- Export Excel button -->
-    <button class="btn btn--primary" id="btn-export">
+    <button type="button" class="btn btn--primary" id="btn-export">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/>
         <line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
-      <span>Ekspor Excel</span>
+      <span>Ekspor CSV</span>
     </button>
   </div>
 </div>
@@ -47,9 +47,9 @@
   <!-- Card 1: Total Transaksi -->
   <div class="riwayat-stat-card">
     <div class="riwayat-stat-content">
-      <span class="riwayat-stat-label">Total Transaksi Hari Ini</span>
+      <span class="riwayat-stat-label">Total Transaksi Tercatat</span>
       <div class="riwayat-stat-val-row">
-        <span class="riwayat-stat-num" id="stat-total">1.428</span>
+        <span class="riwayat-stat-num" id="stat-total">0</span>
         <span class="riwayat-stat-unit">Kendaraan</span>
       </div>
     </div>
@@ -65,8 +65,8 @@
     <div class="riwayat-stat-content">
       <span class="riwayat-stat-label">Status Normal</span>
       <div class="riwayat-stat-val-row">
-        <span class="riwayat-stat-num" id="stat-normal">1.419</span>
-        <span class="riwayat-stat-badge-pass" id="stat-normal-badge">99.4% Lolos</span>
+        <span class="riwayat-stat-num" id="stat-normal">0</span>
+        <span class="riwayat-stat-badge-pass" id="stat-normal-badge">0% Lolos</span>
       </div>
     </div>
     <div class="riwayat-stat-icon-box riwayat-stat-icon-box--normal">
@@ -76,12 +76,12 @@
     </div>
   </div>
 
-  <!-- Card 3: Overdimension -->
+  <!-- Card 3: Overweight -->
   <div class="riwayat-stat-card">
     <div class="riwayat-stat-content">
-      <span class="riwayat-stat-label">Overdimension</span>
+      <span class="riwayat-stat-label">Overweight</span>
       <div class="riwayat-stat-val-row">
-        <span class="riwayat-stat-num is-danger" id="stat-overdimensi">9</span>
+        <span class="riwayat-stat-num is-danger" id="stat-overdimensi">0</span>
         <span class="riwayat-stat-unit" style="color: var(--clr-danger); font-weight: 600;">Unit</span>
       </div>
     </div>
@@ -106,10 +106,10 @@
       type="text"
       id="search-input"
       class="riwayat-search-input"
-      placeholder="Cari No. Tiket atau Nama Pengemudi..."
+      placeholder="Cari No. Tiket, ID Pemeriksaan, atau Nama Pengemudi..."
     />
   </div>
-  <button class="btn btn--outline" id="btn-reset-filter">
+  <button type="button" class="btn btn--outline" id="btn-reset-filter">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
       <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -130,7 +130,8 @@
         </svg>
       </span>
       <select class="riwayat-select" id="filter-tanggal">
-        <option value="">17 Nov 2026 (Hari Ini)</option>
+        <option value="">Semua Tanggal</option>
+        <option value="today" id="opt-today">Hari Ini</option>
         <option value="7">7 Hari Terakhir</option>
         <option value="30">30 Hari Terakhir</option>
       </select>
@@ -152,10 +153,6 @@
         <option value="Gol A">Golongan A (Mobil)</option>
         <option value="Gol B">Golongan B (Bus)</option>
         <option value="Gol C">Golongan C (Truk)</option>
-        <option value="IV">Golongan IV</option>
-        <option value="V">Golongan V</option>
-        <option value="VI">Golongan VI</option>
-        <option value="VII">Golongan VII</option>
       </select>
     </div>
   </div>
@@ -173,7 +170,6 @@
         <option value="">Semua Status</option>
         <option value="Normal">Normal</option>
         <option value="Overweight">Overweight</option>
-        <option value="Overdimension">Overdimension</option>
       </select>
     </div>
   </div>
@@ -187,7 +183,7 @@
         <thead>
           <tr>
             <th>FOTO</th>
-            <th>NO. TIKET</th>
+            <th>NO. TIKET / ID</th>
             <th>WAKTU VERIFIKASI</th>
             <th>NAMA PENGEMUDI</th>
             <th>NAMA PETUGAS</th>
@@ -198,7 +194,9 @@
           </tr>
         </thead>
         <tbody id="riwayat-tbody">
-          <!-- Populated by static/js/riwayat.js with rows matching Screenshot 3 -->
+          <tr>
+            <td colspan="9" style="text-align:center;padding:32px;color:#94A3B8;">Memuat riwayat pemeriksaan...</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -207,7 +205,7 @@
 
 <!-- Pagination Bar -->
 <div class="riwayat-pagination-bar">
-  <span id="pagination-info">Menampilkan 1 - 6 dari 1.428 transaksi terverifikasi</span>
+  <span id="pagination-info">Menampilkan 0 dari 0 transaksi terverifikasi</span>
   <div class="riwayat-pagination" id="pagination">
     <!-- Populated by JS -->
   </div>

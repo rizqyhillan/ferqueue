@@ -3,131 +3,108 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/ai_assistant.css" />
-<style>
-  .ai-source-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: #EDE9FE;
-    color: #6B21A8;
-    padding: 3px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-right: 6px;
-    margin-top: 6px;
-  }
-  .ai-vehicle-summary-card {
-    background: #F8FAFC;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-  .ai-vehicle-summary-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #0F172A;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .ai-vehicle-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    font-size: 11.5px;
-  }
-  .ai-vehicle-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 6px;
-    background: #FFFFFF;
-    border-radius: 4px;
-    border: 1px solid #F1F5F9;
-  }
-  .ai-vehicle-key {
-    color: #64748B;
-  }
-  .ai-vehicle-val {
-    font-weight: 600;
-    color: #0F172A;
-  }
-</style>
 {% endblock %}
 
 {% block content %}
 <!-- Eyebrow & Header -->
 <div class="page-eyebrow">
   <span class="page-eyebrow-dot"></span>
-  <span>MODUL INTELIJEN OPERASIONAL • PENALARAN REGULASI &amp; SENGKETA MUATAN</span>
+  <span>MODUL INTELIJEN OPERASIONAL • MULTI-TURN RAG, AUDIT VISUAL &amp; SOP</span>
 </div>
 
 <div class="page-header-row">
   <div class="page-header-left">
     <h1 class="page-title">FERQUEUE AI Assistant &amp; Dispute Advisor</h1>
-    <p class="page-subtitle">Asisten cerdas analisis kepatuhan regulasi Permenhub PM 103/2017, evaluasi kelebihan berat muatan, dan panduan penanganan operasional gerbang.</p>
+    <p class="page-subtitle">Asisten cerdas berbasis Hybrid RAG, audit visual multimodal (foto kendaraan), ringkasan audit harian, dan manajemen dokumen SOP PM 103/2017.</p>
   </div>
   <div class="page-header-right">
     <div class="badge-header">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
       </svg>
-      <span>Engine: <strong>LLM RAG Reasoning</strong></span>
+      <span>Engine: <strong>Hybrid RAG + Vision</strong></span>
     </div>
-    <div class="badge-header">
-      <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#16A34A;"></span>
-      <span>Dasar Regulasi: <strong>PM 103/2017 (Pasal 2, 4, 5, 6)</strong></span>
-    </div>
+    <button type="button" class="btn btn--primary" id="btn-open-sop-manager">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <span>Kelola SOP &amp; RAG</span>
+    </button>
   </div>
 </div>
 
 <!-- 2-Column AI Grid -->
 <div class="ai-grid">
 
-  <!-- LEFT COLUMN: Flagged Tickets & Shortcut Prompts -->
+  <!-- LEFT COLUMN: Flagged Tickets, Shortcuts & SOP Summary -->
   <div class="ai-left">
 
-    <!-- Card: Kasus Kendaraan Bermasalah (Overweight) dari Database -->
+    <!-- Card: Kasus Kendaraan Bermasalah (Overweight) -->
     <div class="card">
       <div class="card__header">
         <h2 class="card__title">
           <span class="card__badge-num">!</span>
           Kendaraan Bermasalah (Overweight)
         </h2>
-        <button id="btn-refresh-cases" class="btn btn--outline btn--sm" style="font-size: 11px; padding: 2px 8px;">Refresh</button>
+        <button type="button" id="btn-refresh-cases" class="btn btn--outline btn--sm" style="font-size: 11px; padding: 3px 9px;">Refresh</button>
       </div>
       <div class="card__body">
         <div class="ai-cases-list" id="ai-cases-container">
           <div style="font-size: 12px; color: var(--clr-text-muted); text-align: center; padding: 12px 0;">
-            Memuat daftar kendaraan bermasalah dari database...
+            Memuat daftar kendaraan bermasalah...
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Card: Investigasi Cepat -->
+    <!-- Card: Pertanyaan & Audit Cepat -->
     <div class="card">
       <div class="card__header">
         <h2 class="card__title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          Pertanyaan &amp; SOP Cepat
+          Pertanyaan &amp; Audit Cepat
         </h2>
       </div>
       <div class="card__body">
         <div class="ai-prompt-list">
-          <button class="ai-prompt-btn" data-query="Apa SOP penanganan jika kendaraan berstatus Overweight?">
-            <span>⚖️ SOP Penanganan Kendaraan Overweight &amp; Jalur Pengalihan</span>
+          <button type="button" class="ai-prompt-btn" data-query="Buatkan ringkasan audit harian hari ini lengkap dengan jumlah kendaraan, pelanggaran overweight, pelanggar terberat, dan rekomendasi tindak lanjut.">
+            <span>📋 Ringkasan Audit Harian &amp; Statistik Operasional Hari Ini</span>
           </button>
-          <button class="ai-prompt-btn" data-query="Berapa batas berat maksimum untuk Golongan A, B, dan C?">
-            <span>📊 Standar Batas Berat Golongan A, B, dan C</span>
+          <button type="button" class="ai-prompt-btn" data-query="Apa SOP penanganan jika kendaraan berstatus Overweight dan bagaimana skrip komunikasinya ke pengemudi?">
+            <span>⚖️ SOP Penanganan Overweight &amp; Skrip Komunikasi</span>
           </button>
-          <button class="ai-prompt-btn" data-query="Apa dasar hukum Permenhub PM 103 Tahun 2017 untuk menolak kendaraan overweight di gerbang?">
-            <span>📜 Ketentuan Penimbangan Permenhub PM 103/2017 (Pasal 2, 4, 5, 6)</span>
+          <button type="button" class="ai-prompt-btn" data-query="Berapa batas berat maksimum dan tarif untuk Golongan A, B, dan C?">
+            <span>📊 Batas Berat &amp; Tarif Golongan A, B, dan C</span>
           </button>
+          <button type="button" class="ai-prompt-btn" data-query="Apa dasar hukum Permenhub PM 103 Tahun 2017 untuk menolak kendaraan overweight di gerbang?">
+            <span>📜 Dasar Hukum Permenhub PM 103/2017 (Pasal 2, 4, 5, 6)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card: Ringkasan Basis Pengetahuan SOP -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+          Basis Pengetahuan RAG
+        </h2>
+        <span class="ai-rag-pill" id="ai-rag-summary-badge">Memuat...</span>
+      </div>
+      <div class="card__body" style="padding: 12px 16px;">
+        <p class="ai-rag-desc" id="ai-rag-summary-text">Memeriksa dokumen SOP dan status indeks ChromaDB...</p>
+        <div class="ai-rag-actions">
+          <button type="button" class="btn btn--outline" id="btn-open-sop-manager-2" style="flex: 1; font-size: 11.5px; padding: 6px 10px;">Kelola Dokumen SOP</button>
+          <button type="button" class="btn btn--outline" id="btn-quick-reindex" style="font-size: 11.5px; padding: 6px 10px;">Re-index</button>
         </div>
       </div>
     </div>
@@ -142,42 +119,40 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17">
             <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
           </svg>
-          <span>Ruang Analisis &amp; Dokumen Regulasi AI</span>
+          <span>Ruang Analisis, Audit Harian &amp; Visual AI</span>
         </div>
-        <span class="ai-chat-status">Sistem Siap Melayani</span>
+        <div class="ai-chat-header-actions">
+          <span class="ai-memory-badge" id="ai-memory-badge" title="Riwayat percakapan tersimpan lokal &amp; dikirim hingga 20 pesan terakhir ke LLM">Memori: 0/40</span>
+          <button type="button" class="ai-reset-chat-btn" id="btn-reset-chat" title="Bersihkan riwayat percakapan">Reset Chat</button>
+          <span class="ai-chat-status">Siap</span>
+        </div>
       </div>
 
       <!-- Messages Area -->
       <div class="ai-messages-area" id="ai-chat-messages">
-        <!-- Initial Assistant Greeting -->
-        <div class="ai-msg ai-msg--assistant">
-          <div class="ai-msg-avatar ai-msg-avatar--assistant">AI</div>
-          <div class="ai-msg-bubble">
-            <div class="ai-output-title">Halo, Petugas Operasional Gerbang FERQUEUE!</div>
-            <div class="ai-output-summary">
-              Saya adalah <strong>FERQUEUE AI Assistant</strong> berbasis <strong>RAG (Retrieval-Augmented Generation)</strong> dan model <strong>Gemini</strong>. Saya siap membantu Anda dalam:
-            </div>
-            <div class="ai-rec-box">
-              <div class="ai-rec-list">
-                <div>• <strong>Analisis Keputusan Overweight:</strong> Menjelaskan selisih berat muatan, kategori tingkat pelanggaran (Ringan &le;15% atau Berat &gt;15%), dan saran pengurangan muatan konkret (dalam gram).</div>
-                <div>• <strong>Panduan Regulasi PM 103/2017:</strong> Penjelasan dasar hukum penolakan tiket (Pasal 5) dan pembukaan palang untuk jalur pengalihan putar balik keluar pelabuhan (Pasal 6).</div>
-                <div>• <strong>Skrip Komunikasi Lapangan:</strong> Contoh kalimat penyampaian sopan dan tegas untuk dibacakan kepada pengemudi.</div>
-              </div>
-            </div>
-            <div style="font-size: 11.5px; color: var(--clr-text-muted); margin-top: 8px;">
-              Pilih salah satu kendaraan bermasalah di sebelah kiri, klik pertanyaan cepat, atau ketik pertanyaan langsung di bawah.
-            </div>
-          </div>
-        </div>
+        <!-- Populated & restored by ai_assistant.js -->
+      </div>
+
+      <!-- Active Context Bar (Selected Vehicle / Attached Image) -->
+      <div class="ai-context-bar" id="ai-context-bar" hidden>
+        <div class="ai-context-chips" id="ai-context-chips"></div>
       </div>
 
       <!-- Input Row -->
       <form id="ai-chat-form" class="ai-chat-input-row">
+        <button type="button" class="ai-attach-btn" id="btn-attach-photo" title="Lampirkan foto kendaraan untuk Audit Visual Multimodal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </button>
+        <input type="file" id="ai-photo-input" accept="image/jpeg,image/png,image/webp" style="display:none;" />
         <input
           type="text"
           id="ai-user-input"
           class="ai-chat-input"
-          placeholder="Ketik pertanyaan operasional, aturan berat PM 103/2017, atau analisis kendaraan..."
+          placeholder="Ketik 'ringkasan audit harian', tanya SOP PM 103/2017, atau lanjutkan diskusi kasus..."
           autocomplete="off"
         />
         <button type="submit" class="ai-chat-send-btn">
@@ -191,6 +166,48 @@
   </div>
 
 </div>
+
+<!-- Dialog Manajemen SOP & RAG -->
+<dialog id="sop-manager-dialog" class="sop-dialog" aria-labelledby="sop-dialog-title">
+  <div class="sop-dialog__header">
+    <div>
+      <h2 id="sop-dialog-title" class="sop-dialog__title">Manajemen Dokumen SOP &amp; Indeks RAG</h2>
+      <p class="sop-dialog__sub" id="sop-dialog-status">Memuat daftar dokumen...</p>
+    </div>
+    <button type="button" class="sop-dialog__close" id="btn-close-sop-dialog" aria-label="Tutup dialog">&times;</button>
+  </div>
+
+  <div class="sop-dialog__body">
+    <!-- Sidebar daftar dokumen SOP -->
+    <div class="sop-list-pane">
+      <div class="sop-list-actions">
+        <button type="button" class="btn btn--primary" id="btn-sop-new" style="flex:1; font-size:12px; padding:6px 10px;">+ SOP Baru</button>
+        <button type="button" class="btn btn--outline" id="btn-sop-upload" style="font-size:12px; padding:6px 10px;">Unggah .md/.txt</button>
+        <input type="file" id="sop-file-upload" accept=".md,.txt,text/markdown,text/plain" style="display:none;" />
+      </div>
+      <div class="sop-files-list" id="sop-files-list"></div>
+    </div>
+
+    <!-- Editor dokumen SOP -->
+    <form class="sop-editor-pane" id="sop-editor-form">
+      <div class="sop-field">
+        <label for="sop-filename-input">Nama File SOP (.md atau .txt)</label>
+        <input type="text" id="sop-filename-input" placeholder="contoh: sop_pemeriksaan_khusus.md" required />
+      </div>
+      <div class="sop-field sop-field--grow">
+        <label for="sop-content-input">Isi Dokumen SOP (Markdown)</label>
+        <textarea id="sop-content-input" placeholder="# Judul SOP&#10;&#10;Tulis prosedur, aturan, atau panduan operasional di sini..." required></textarea>
+      </div>
+      <div class="sop-editor-footer">
+        <button type="button" class="btn btn--outline sop-btn-danger" id="btn-sop-delete">Hapus SOP</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn--outline" id="btn-sop-reindex">Re-index RAG</button>
+          <button type="submit" class="btn btn--primary" id="btn-sop-save">Simpan &amp; Re-index</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</dialog>
 {% endblock %}
 
 {% block extra_js %}

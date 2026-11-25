@@ -3,8 +3,7 @@
  * Monitoring logic: Polling berat, kamera visual, dimensi, penerbitan tiket & pembukaan portal.
  */
 
-import { startClock, formatNumber, toast, API_BASE_URL } from './utils.js';
-import { CATEGORIES, categoryInfo } from './tickets.js';
+import { startClock, formatNumber, formatDateId, toast, API_BASE_URL } from './utils.js';
 import './live_detection.js';
 
 const $ = s => document.querySelector(s);
@@ -38,6 +37,7 @@ const state = {
   imageUrl: null,
   cameraMode: 'demo',    // 'demo' | 'live' | 'upload'
   cvActive: false,
+  lastGolSyncAt: 0,
 };
 
 function formatGram(value) {
@@ -46,7 +46,7 @@ function formatGram(value) {
   return num.toFixed(1).replace('.', ',');
 }
 
-function applyGolonganMeta(code) {
+function applyGolonganMeta(code, { updateVehicleType = false } = {}) {
   const key = String(code || 'A').toUpperCase().replace(/^GOL\.?\s*/, '').trim();
   const meta = GOLONGAN_META[key] || GOLONGAN_META.A;
   state.golonganCode = key in GOLONGAN_META ? key : 'A';
@@ -55,6 +55,11 @@ function applyGolonganMeta(code) {
   state.weightLimit = meta.limit;
   state.tarif = meta.tarif;
   state.vehicleKind = meta.jenis;
+  if (updateVehicleType) {
+    const label = meta.jenis.charAt(0).toUpperCase() + meta.jenis.slice(1);
+    state.vehicleType = `${label} (Golongan ${state.golonganCode})`;
+  }
+  state.status = state.weight > state.weightLimit ? 'Overweight' : 'Normal';
 }
 
 function mapClassNameToGolongan(className) {
@@ -111,6 +116,9 @@ function formatDimPair(panjang, tinggi) {
 
 function updateClocks() {
   const now = new Date();
+  const monDate = document.getElementById('mon-date');
+  if (monDate) monDate.textContent = formatDateId(now);
+
   const timeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
   const monClock = document.getElementById('mon-clock');
   if (monClock) monClock.textContent = `${timeStr} WIB`;
@@ -140,14 +148,23 @@ function renderUI() {
       : 'Menunggu Sensor ESP32';
   }
 
+  const isOver = state.status.toLowerCase().includes('over') || state.weight > state.weightLimit;
+
   const weightBar = document.getElementById('weight-bar');
   if (weightBar) {
     const pct = Math.min(100, Math.max(0, (state.weight / 150) * 100));
     weightBar.style.width = `${pct}%`;
+    weightBar.classList.toggle('is-danger', isOver);
+    weightBar.classList.toggle('is-warning', !isOver && state.weightLimit > 0 && state.weight >= state.weightLimit * 0.85);
   }
 
   // Update dimensi di kamera & panel
   const preferCm = useCmDisplay(state.panjang, state.tinggi);
+
+  const demoLabel = document.getElementById('cam-demo-label');
+  if (demoLabel) {
+    demoLabel.textContent = `${state.vehicleKind.toUpperCase()} · PRATINJAU`;
+  }
 
   const overlayDims = document.getElementById('cam-overlay-dims');
   if (overlayDims) overlayDims.textContent = `◄ P: ${formatDimShort(state.panjang, preferCm)} | T: ${formatDimShort(state.tinggi, preferCm)} ►`;
@@ -170,8 +187,13 @@ function renderUI() {
   const classDesc = document.getElementById('class-desc');
   if (classDesc) classDesc.textContent = state.golonganDesc;
 
+  document.querySelectorAll('.mon-gol-btn').forEach(btn => {
+    const isActive = btn.dataset.gol === state.golonganCode;
+    btn.classList.toggle('is-active', isActive);
+    btn.setAttribute('aria-pressed', String(isActive));
+  });
+
   // Status Lolos / Overweight
-  const isOver = state.status.toLowerCase().includes('over') || state.weight > state.weightLimit;
   const statusPill = document.getElementById('det-status-pill');
   if (statusPill) {
     statusPill.className = isOver ? 'mon-status-pill is-danger' : 'mon-status-pill';
@@ -223,7 +245,7 @@ async function pollSensor() {
       state.sensorLive = Boolean(data.waktu);
     }
 
-    const stRes = await fetch(`${API_BASE_URL}/api/status-kendaraan`);
+    const stRes = await fetch(`${API_BASE_URL}/api/status-kendaraan`, { cache: 'no-store' });
     if (stRes.ok) {
       const stData = await stRes.json();
       if (!state.cameraDimensionsActive) {
@@ -232,10 +254,15 @@ async function pollSensor() {
         if (Number.isFinite(pVal) && pVal > 0) state.panjang = Number(pVal.toFixed(2));
         if (Number.isFinite(tVal) && tVal > 0) state.tinggi = Number(tVal.toFixed(2));
       }
-      if (stData.golongan && stData.golongan !== '-') {
-        applyGolonganMeta(stData.golongan);
+      const recentlyChangedLocally = Date.now() - state.lastGolSyncAt < 4000;
+      if (!recentlyChangedLocally && stData.golongan && stData.golongan !== '-') {
+        applyGolonganMeta(stData.golongan, { updateVehicleType: !state.cvActive });
       }
-      if (stData.status) state.status = stData.status;
+      if (!recentlyChangedLocally && stData.status) {
+        state.status = stData.status;
+      } else {
+        state.status = state.weight > state.weightLimit ? 'Overweight' : 'Normal';
+      }
     }
   } catch (err) {
     // Abaikan error polling agar tidak mengganggu UI demo
@@ -261,7 +288,7 @@ function showTicketModal(ticket) {
   if (!modal) return;
 
   const ticketNo = ticket.nomor || `FQ-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 900) + 100)}`;
-  const driverName = ticket.pengemudi || 'Budi Santoso';
+  const driverName = ticket.pengemudi || 'Pengemudi';
   const vehicleClass = ticket.golongan || state.golongan;
   const statusVal = ticket.status || state.status;
   const isOver = statusVal.toLowerCase().includes('over') || statusVal.toLowerCase().includes('langgar');
@@ -284,9 +311,15 @@ function showTicketModal(ticket) {
   const elClass = document.getElementById('modal-vehicle-class');
   if (elClass) elClass.textContent = vehicleClass;
 
-  const preferCm = useCmDisplay(state.panjang, state.tinggi);
+  const pModal = ticket.panjang_cm !== undefined && ticket.panjang_cm !== null && Number(ticket.panjang_cm) > 0
+    ? Number(ticket.panjang_cm)
+    : state.panjang;
+  const tModal = ticket.tinggi_cm !== undefined && ticket.tinggi_cm !== null && Number(ticket.tinggi_cm) > 0
+    ? Number(ticket.tinggi_cm)
+    : state.tinggi;
+  const preferCm = useCmDisplay(pModal, tModal);
   const elDims = document.getElementById('modal-dims');
-  if (elDims) elDims.textContent = formatDimPair(state.panjang, state.tinggi);
+  if (elDims) elDims.textContent = formatDimPair(pModal, tModal);
 
   const elWeight = document.getElementById('modal-weight');
   const weightGram = formatGram(ticket.berat_gram ?? ticket.berat ?? state.weight);
@@ -319,7 +352,8 @@ function showTicketModal(ticket) {
     if (totalBox) totalBox.style.display = 'none';
     if (violationBox) violationBox.style.display = 'block';
     if (violationDesc) {
-      violationDesc.innerHTML = `Kendaraan terdeteksi <strong>Overweight</strong>: P: ${formatDimShort(state.panjang, preferCm)} | T: ${formatDimShort(state.tinggi, preferCm)} | Berat: ${weightGram} g melebihi batas ${state.golongan} (${state.weightLimit} g) sesuai PM 103/2017.<br><br><strong>Instruksi Petugas Lapangan:</strong> Tiket masuk tidak diterbitkan (Pasal 5). Gerbang dibuka khusus untuk <strong>Jalur Keluar / Putar Balik (Pasal 6)</strong> agar pengemudi menurunkan kelebihan muatan di luar pelabuhan.`;
+      const limitGram = ticket.batas_berat_gram ?? state.weightLimit;
+      violationDesc.innerHTML = `Kendaraan terdeteksi <strong>Overweight</strong>: P: ${formatDimShort(pModal, preferCm)} | T: ${formatDimShort(tModal, preferCm)} | Berat: ${weightGram} g melebihi batas ${vehicleClass} (${limitGram} g) sesuai PM 103/2017.<br><br><strong>Instruksi Petugas Lapangan:</strong> Tiket masuk tidak diterbitkan (Pasal 5). Gerbang dibuka khusus untuk <strong>Jalur Keluar / Putar Balik (Pasal 6)</strong> agar pengemudi menurunkan kelebihan muatan di luar pelabuhan.`;
     }
     if (printBtn) printBtn.className = 'btn btn--danger';
     if (printText) printText.textContent = 'Cetak Tiket Pelanggaran';
@@ -338,7 +372,7 @@ function showTicketModal(ticket) {
   }
 
   const elTariff = document.getElementById('modal-total-tariff');
-  if (elTariff) elTariff.textContent = `Rp ${formatNumber(state.tarif)}`;
+  if (elTariff) elTariff.textContent = `Rp ${formatNumber(ticket.tarif ?? state.tarif)}`;
 
   const elBarcodeNo = document.getElementById('modal-barcode-no');
   if (elBarcodeNo) elBarcodeNo.textContent = `*${ticketNo}*`;
@@ -360,9 +394,15 @@ function showTicketModal(ticket) {
     }
   }
 
-  // Tampilkan Pop-up
+  // Tampilkan Pop-up & fokuskan tombol cetak agar Enter berikutnya langsung cetak & keluar
   modal.classList.add('is-open');
   modal.setAttribute('aria-hidden', 'false');
+  const printBtnFocus = document.getElementById('btn-print-ticket-modal');
+  if (printBtnFocus) {
+    printBtnFocus.focus();
+  } else if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
 }
 
 // Tutup Modal Pop-up Tiket
@@ -382,17 +422,59 @@ function resetToInitialState() {
   const driverInput = document.getElementById('driver-name');
   if (driverInput) {
     driverInput.value = '';
-    driverInput.placeholder = 'Nama Pengemudi Berikutnya...';
-    driverInput.focus();
+    driverInput.placeholder = 'Masukkan nama pengemudi (opsional)...';
+    setTimeout(() => {
+      const modal = document.getElementById('ticket-modal');
+      if (!modal?.classList.contains('is-open')) {
+        driverInput.focus();
+      }
+    }, 80);
   }
 
-  // Nol-kan timbangan tare di latar belakang
+  // Nol-kan tampilan & kirim perintah tare timbangan di latar belakang
+  state.weight = 0.0;
+  state.status = 'Normal';
+  renderUI();
   fetch(`${API_BASE_URL}/api/tare`, { method: 'POST' }).catch(() => {});
 
   toast('Sistem kembali ke posisi awal. Siap untuk kendaraan berikutnya.', 'info');
 }
 
 let isIssuingTicket = false;
+let isPrintingTicket = false;
+let lastPrintFinishedAt = 0;
+
+// Cetak tiket otomatis lalu keluar dari tampilan modal tiket
+function printAndCloseTicketModal() {
+  const modal = document.getElementById('ticket-modal');
+  if (!modal || !modal.classList.contains('is-open') || isPrintingTicket) return;
+  isPrintingTicket = true;
+
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    isPrintingTicket = false;
+    lastPrintFinishedAt = Date.now();
+    window.removeEventListener('afterprint', onAfterPrint);
+    setTimeout(() => {
+      resetToInitialState();
+    }, 60);
+  };
+
+  const onAfterPrint = () => finish();
+  window.addEventListener('afterprint', onAfterPrint, { once: true });
+
+  try {
+    window.print();
+  } catch {
+    finish();
+    return;
+  }
+
+  // Fallback jika browser tidak memicu event afterprint setelah dialog print selesai
+  setTimeout(finish, 250);
+}
 
 // Ambil snapshot JPEG dari kamera live atau foto yang diunggah
 function captureVehiclePhoto() {
@@ -435,11 +517,19 @@ function captureVehiclePhoto() {
 // Penerbitan Tiket, Foto Kendaraan & Buka Barrier (Instan & Responsif)
 async function issueTicket(e) {
   if (e) e.preventDefault();
-  if (isIssuingTicket) return;
+  const modalEl = document.getElementById('ticket-modal');
+  if (
+    isIssuingTicket ||
+    isPrintingTicket ||
+    modalEl?.classList.contains('is-open') ||
+    Date.now() - lastPrintFinishedAt < 800
+  ) {
+    return;
+  }
   isIssuingTicket = true;
 
   const driverInput = document.getElementById('driver-name');
-  const driver = driverInput ? driverInput.value.trim() || 'Budi Santoso' : 'Budi Santoso';
+  const driver = driverInput ? driverInput.value.trim() || 'Pengemudi' : 'Pengemudi';
 
   const isOver = state.status.toLowerCase().includes('over') || state.weight > state.weightLimit;
   const capturedPhoto = captureVehiclePhoto();
@@ -540,16 +630,18 @@ function init() {
     }
   });
 
-  // Trigger Enter pada input driver untuk langsung memunculkan pop-up tiket
-  const driverInput = document.getElementById('driver-name');
-  if (driverInput) {
-    driverInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        issueTicket(e);
-      }
+  // Pilih golongan manual (A / B / C)
+  document.querySelectorAll('.mon-gol-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const gol = btn.dataset.gol;
+      if (!gol) return;
+      state.lastGolSyncAt = Date.now();
+      applyGolonganMeta(gol, { updateVehicleType: true });
+      renderUI();
+      syncSensorStateToBackend();
+      toast(`Golongan diubah ke ${state.golongan} (batas ${state.weightLimit} g).`, 'info');
     });
-  }
+  });
 
   // Modal event listeners
   document.getElementById('btn-close-ticket-modal')?.addEventListener('click', () => {
@@ -568,27 +660,54 @@ function init() {
   }
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal?.classList.contains('is-open')) {
+    const isModalOpen = Boolean(modal?.classList.contains('is-open'));
+
+    if (e.key === 'Escape' && isModalOpen) {
+      e.preventDefault();
       resetToInitialState();
       return;
     }
 
-    // Shortcut Enter global: foto kendaraan + terbitkan struk + buka gate
-    if (e.key === 'Enter' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
-      if (modal?.classList.contains('is-open')) return;
-      const active = document.activeElement;
-      if (active && active.id === 'driver-name') return; // sudah ditangani listener #driver-name
-      const tag = active?.tagName?.toLowerCase();
-      if (tag === 'button' || tag === 'a' || tag === 'textarea' || tag === 'select' || tag === 'input') {
-        return;
+    if (e.key !== 'Enter' || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) {
+      return;
+    }
+
+    const active = document.activeElement;
+
+    // Saat modal struk terbuka (Normal maupun Overweight):
+    // Tekan Enter lagi -> otomatis cetak tiket & keluar dari tampilan tiket
+    if (isModalOpen) {
+      if (active && active.id === 'btn-copy-ticket-no') {
+        return; // biarkan tombol salin tetap bekerja jika dipilih via Tab
       }
       e.preventDefault();
-      issueTicket(e);
+      e.stopPropagation();
+      printAndCloseTicketModal();
+      return;
     }
+
+    if (isIssuingTicket || isPrintingTicket || Date.now() - lastPrintFinishedAt < 800) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Shortcut Enter: foto kendaraan + terbitkan struk (Normal/Overweight) + buka gate
+    if (active && active.id === 'driver-name') {
+      e.preventDefault();
+      issueTicket(e);
+      return;
+    }
+    const tag = active?.tagName?.toLowerCase();
+    if (tag === 'button' || tag === 'a' || tag === 'textarea' || tag === 'select' || tag === 'input') {
+      return;
+    }
+    e.preventDefault();
+    issueTicket(e);
   });
 
   document.getElementById('btn-print-ticket-modal')?.addEventListener('click', () => {
-    window.print();
+    printAndCloseTicketModal();
   });
 
   document.getElementById('btn-copy-ticket-no')?.addEventListener('click', () => {
@@ -809,7 +928,7 @@ function init() {
     });
   }
 
-  // Update dimensi panjang & tinggi dari kalibrasi kamera (trigonometri / koin 50 yen)
+  // Update dimensi panjang & tinggi dari kalibrasi kamera (trigonometri)
   window.addEventListener('ferqueue:camera-measurement', (e) => {
     const active = Boolean(e.detail?.active);
     const estimate = e.detail?.estimate;
@@ -835,12 +954,13 @@ function init() {
     const msgEl = document.getElementById('camera-message');
     if (msgEl) msgEl.classList.remove('is-error');
     if (data?.calibration_only) {
-      state.vehicleType = 'Mode Kalibrasi Koin Aktif';
+      state.vehicleType = 'Mode Kalibrasi Geometri Aktif';
     } else if (data?.detections?.length) {
       const classes = [...new Set(data.detections.map((item) => item.class_name))];
       state.vehicleType = classes.join(', ');
       const mappedGol = mapClassNameToGolongan(data.detections[0].class_name);
       if (mappedGol) {
+        state.lastGolSyncAt = Date.now();
         applyGolonganMeta(mappedGol);
         syncSensorStateToBackend();
       }

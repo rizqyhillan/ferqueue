@@ -8,7 +8,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from ferqueue_cv.live_api import Handler
 
@@ -78,79 +78,6 @@ class LiveApiContractTests(unittest.TestCase):
                     self.assertEqual(status, expected)
             detect.assert_not_called()
 
-    @unittest.skipUnless(importlib.util.find_spec('cv2'), 'OpenCV diperlukan untuk kalibrasi koin.')
-    def test_same_frame_provides_coin_scale_and_dimensions(self):
-        import numpy as np
-        image = Image.new('RGB', (640, 320), 'white')
-        ImageDraw.Draw(image).ellipse((488, 128, 552, 192), fill='black')
-        encoded = io.BytesIO()
-        image.save(encoded, format='PNG')
-        region = {'Content-Type': 'image/png', 'X-Coin-Region': '.3,.7,.7,.95'}
-        result = {'detection_boxes': np.array([[.4, .2, .6, .4]]),
-                  'detection_scores': np.array([.9]), 'detection_classes': np.array([1])}
-        with patch('ferqueue_cv.live_api.detect', return_value=result):
-            status, payload = self.send('/detect', encoded.getvalue(), region)
-        self.assertEqual(status, 200)
-        calibration = payload['calibration']
-        self.assertEqual(calibration['status'], 'ready')
-        measurement = calibration['measurement']
-        self.assertEqual(measurement['status'], 'estimated')
-        self.assertAlmostEqual(measurement['length_cm'], 4.2, delta=.1)
-        self.assertAlmostEqual(measurement['height_cm'], 2.1, delta=.06)
-
-        self.server.context['detector'] = None
-        with patch('ferqueue_cv.live_api.detect') as detect:
-            status, payload = self.send('/detect', encoded.getvalue(), region)
-            detect.assert_not_called()
-        self.assertEqual(status, 200)
-        self.assertTrue(payload['calibration_only'])
-        self.assertEqual(payload['calibration']['measurement']['status'], 'no_vehicle')
-
-    @unittest.skipUnless(importlib.util.find_spec('cv2'), 'OpenCV diperlukan untuk kalibrasi koin.')
-    def test_tilted_coin_and_partial_vehicle_do_not_produce_dimensions(self):
-        from ferqueue_cv.side_measurement import estimate_side
-
-        frame = Image.new('RGB', (640, 320), 'white')
-        region = (.3, .7, .7, .95)
-        ImageDraw.Draw(frame).ellipse((488, 128, 552, 170), fill='black')
-        self.assertEqual(estimate_side(frame, region, [])['status'], 'coin_not_found')
-
-        ImageDraw.Draw(frame).ellipse((488, 128, 552, 192), fill='black')
-        partial = {'box': [.4, 0, .6, .4]}
-        self.assertEqual(estimate_side(frame, region, [partial])['measurement'], {'status': 'vehicle_clipped'})
-        self.assertEqual(estimate_side(frame, region, [partial, partial])['measurement'], {'status': 'multiple_vehicles'})
-
-    @unittest.skipUnless(importlib.util.find_spec('cv2'), 'OpenCV diperlukan untuk kalibrasi koin.')
-    def test_slightly_tilted_holed_coin_preserves_true_scale(self):
-        import math
-        import numpy as np
-        from ferqueue_cv.side_measurement import estimate_side
-
-        width, height = 640, 320
-        true_d = 64.0
-        radius = true_d / 2.0
-        cos_tilt = math.cos(math.radians(20))
-        yy, xx = np.ogrid[:height, :width]
-        cx, cy = 520.0, 160.0
-        outer = ((xx + .5 - cx) / radius) ** 2 + ((yy + .5 - cy) / (radius * cos_tilt)) ** 2
-        hole = ((xx + .5 - cx) / (radius * 4 / 21)) ** 2 + ((yy + .5 - cy) / (radius * 4 / 21 * cos_tilt)) ** 2
-        pixels = np.full((height, width, 3), 255, dtype=np.uint8)
-        pixels[(outer <= 1.0) & (hole >= 1.0)] = 35
-        frame = Image.fromarray(pixels)
-
-        # Box is 192 px wide (3x coin = 6.30 cm) and 64 px tall (1x coin = 2.10 cm).
-        result = estimate_side(frame, (.3, .7, .7, .95), [{'box': [.4, .1, .6, .4]}])
-        self.assertEqual(result['status'], 'ready')
-        self.assertEqual(result['measurement']['status'], 'estimated')
-        self.assertAlmostEqual(result['measurement']['length_cm'], 6.3, delta=.1)
-        self.assertAlmostEqual(result['measurement']['height_cm'], 2.1, delta=.05)
-
-    def test_invalid_coin_region_is_rejected(self):
-        for region in ('0,0,1', '0,0,1,1.1', '0,0,nan,1', '0,.5,1,.5'):
-            with self.subTest(region=region):
-                status, _ = self.send('/detect', b'png', {'Content-Type': 'image/png', 'X-Coin-Region': region})
-                self.assertEqual(status, 400)
-
     def test_invalid_camera_geometry_is_rejected(self):
         for header in ('27.7,14.3', '0,14.3,1.0', '27.7,-1,1.0', '27.7,14.3,0', '27.7,14.3,nan', 'bad,14.3,1.0'):
             with self.subTest(header=header):
@@ -181,6 +108,14 @@ class LiveApiContractTests(unittest.TestCase):
         self.assertAlmostEqual(measurement['length_cm'], 7.41, delta=.02)
         self.assertAlmostEqual(measurement['height_cm'], 2.23, delta=.02)
         self.assertEqual(measurement['assumed_width_cm'], 2.25)
+
+        self.server.context['detector'] = None
+        with patch('ferqueue_cv.live_api.detect') as detect:
+            status, payload = self.send('/detect', encoded.getvalue(), headers)
+            detect.assert_not_called()
+        self.assertEqual(status, 200)
+        self.assertTrue(payload['calibration_only'])
+        self.assertEqual(payload['calibration']['measurement']['status'], 'no_vehicle')
 
     def test_camera_geometry_edge_cases(self):
         from ferqueue_cv.side_measurement import estimate_side_from_geometry

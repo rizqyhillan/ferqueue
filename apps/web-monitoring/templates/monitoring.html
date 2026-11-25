@@ -17,10 +17,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
-      <span>17 Nov 2026</span>
+      <span id="mon-date">—</span>
     </div>
     <div class="badge-header">
-      <strong id="mon-clock" style="font-family: var(--font-mono); font-size: 13.5px;">16:32:10 WIB</strong>
+      <strong id="mon-clock" style="font-family: var(--font-mono); font-size: 13.5px;">--:--:-- WIB</strong>
     </div>
   </div>
 </div>
@@ -78,10 +78,10 @@
         <div class="mon-cam-bbox" id="cam-demo-bbox">
           <div class="mon-cam-bbox-label">
             <span>■</span>
-            <span>TRUK - DATA CENTER [AI ACC: 98.4%]</span>
+            <span id="cam-demo-label">MOBIL · PRATINJAU</span>
           </div>
           <div class="mon-cam-bbox-dims" id="cam-overlay-dims">
-            ◄ P: 7.20m | T: 3.20m ►
+            ◄ P: — | T: — ►
           </div>
         </div>
 
@@ -101,30 +101,30 @@
           </svg>
           <span>JENIS KENDARAAN TERDETEKSI AI</span>
         </div>
-        <div class="mon-detected-title" id="det-vehicle-type">Truk Sedang Boks (Golongan V-A)</div>
+        <div class="mon-detected-title" id="det-vehicle-type">Mobil (Golongan A)</div>
 
         <div class="mon-metrics-row">
           <!-- Panjang -->
           <div class="mon-metric-box">
             <span class="mon-metric-lbl">PANJANG (P)</span>
             <div class="mon-metric-val">
-              <span id="det-p">720</span><small>cm</small>
+              <span id="det-p">—</span><small>cm</small>
             </div>
-            <span class="mon-metric-limit">Maks: 1.200 cm</span>
+            <span class="mon-metric-limit">Estimasi kamera samping</span>
           </div>
 
           <!-- Tinggi -->
           <div class="mon-metric-box">
             <span class="mon-metric-lbl">TINGGI (T)</span>
             <div class="mon-metric-val">
-              <span id="det-t">320</span><small>cm</small>
+              <span id="det-t">—</span><small>cm</small>
             </div>
-            <span class="mon-metric-limit">Maks: 380 cm</span>
+            <span class="mon-metric-limit">Estimasi kamera samping</span>
           </div>
 
-          <!-- Status Dimensi -->
+          <!-- Status Muatan -->
           <div class="mon-metric-box">
-            <span class="mon-metric-lbl">STATUS DIMENSI</span>
+            <span class="mon-metric-lbl">STATUS MUATAN</span>
             <div class="mon-status-pill" id="det-status-pill">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
                 <polyline points="20 6 9 17 4 12"/>
@@ -153,11 +153,10 @@
       </div>
       <p class="mon-cam-status" id="camera-message" role="status">Kamera perangkat dapat diaktifkan secara manual atau unggah foto kendaraan.</p>
 
-      <!-- Kalibrasi Dimensi (Segitiga & Jarak Kamera / Koin 50 Yen) -->
-      <div class="coin-calibration">
-        <div class="cal-mode-bar" role="tablist" aria-label="Metode kalibrasi dimensi">
-          <button type="button" class="cal-mode-btn is-active" id="cal-mode-trigonometry" role="tab" aria-selected="true">Segitiga &amp; Jarak</button>
-          <button type="button" class="cal-mode-btn" id="cal-mode-coin" role="tab" aria-selected="false">Koin 50 Yen</button>
+      <!-- Kalibrasi Dimensi (Geometri Trigonometri & Jarak Kamera) -->
+      <div class="geo-calibration">
+        <div class="cal-mode-bar">
+          <span class="cal-mode-title">Kalibrasi Dimensi · Trigonometri &amp; Jarak Kamera</span>
           <span class="geo-summary-pill" id="geo-summary">D = 31,17 cm · θ = 27,31°</span>
         </div>
 
@@ -180,20 +179,13 @@
               <input type="number" id="geo-focal-norm" min="0.1" step="0.0001" placeholder="Kalibrasi 1×" />
             </label>
           </div>
-          <div class="coin-actions">
+          <div class="geo-actions">
             <button type="button" class="btn btn--outline" id="calibrate-geometry" aria-pressed="false" disabled>Kalibrasi acuan (2 titik)</button>
             <button type="button" class="text-button" id="clear-geometry" hidden>Reset fokus</button>
           </div>
         </div>
 
-        <div id="cal-panel-coin" hidden>
-          <div class="coin-actions">
-            <button type="button" class="btn btn--outline" id="select-coin" aria-pressed="false" disabled>Tandai koin 50 yen</button>
-            <button type="button" class="text-button" id="clear-coin" hidden>Hapus kalibrasi</button>
-          </div>
-        </div>
-
-        <p id="coin-status" role="status">Aktifkan kamera atau unggah foto untuk kalibrasi jarak kamera.</p>
+        <p id="geo-status" role="status">Aktifkan kamera atau unggah foto untuk kalibrasi jarak kamera.</p>
       </div>
     </div>
   </div>
@@ -245,10 +237,10 @@
       <div class="card__body">
         <div class="mon-class-top">
           <span class="mon-class-lbl">KLASIFIKASI TARIF</span>
-          <span class="mon-class-dims-right" id="class-dims-summary">P: 7.20 m · T: 3.20 m</span>
+          <span class="mon-class-dims-right" id="class-dims-summary">P: — · T: —</span>
         </div>
         <div class="mon-class-name-row">
-          <span class="mon-class-code" id="class-display">GOL. V-A</span>
+          <span class="mon-class-code" id="class-display">GOL. A</span>
           <div class="mon-class-status-right" id="class-limit-status">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
               <circle cx="12" cy="12" r="10"/><polyline points="16 10 11 15 8 12"/>
@@ -256,7 +248,12 @@
             <span>Lolos Limit</span>
           </div>
         </div>
-        <div class="mon-class-sub" id="class-desc">Kendaraan Barang Sedang</div>
+        <div class="mon-class-sub" id="class-desc">Kendaraan Penumpang (Mobil)</div>
+        <div class="mon-gol-selector" role="group" aria-label="Pilih Golongan Manual">
+          <button type="button" class="mon-gol-btn is-active" data-gol="A">Gol. A · Mobil</button>
+          <button type="button" class="mon-gol-btn" data-gol="B">Gol. B · Bus</button>
+          <button type="button" class="mon-gol-btn" data-gol="C">Gol. C · Truk</button>
+        </div>
       </div>
     </div>
 
@@ -284,8 +281,8 @@
                 id="driver-name"
                 name="pengemudi"
                 class="mon-ticket-input"
-                placeholder="Budi Santoso"
-                value="Budi Santoso"
+                placeholder="Masukkan nama pengemudi (opsional)..."
+                value=""
                 autocomplete="off"
               />
             </div>
@@ -293,7 +290,7 @@
 
           <div class="mon-ticket-tariff-row">
             <span class="mon-ticket-tariff-lbl">Total Tarif Manifest</span>
-            <span class="mon-ticket-tariff-val" id="tariff-display">Rp 642.000</span>
+            <span class="mon-ticket-tariff-val" id="tariff-display">Rp 60.000</span>
           </div>
 
           <button type="submit" class="mon-ticket-submit-btn" id="btn-issue-ticket">
@@ -492,6 +489,7 @@
           <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
         </svg>
       </button>
+      <div class="ticket-modal-hint">Tekan <kbd>Enter</kbd> lagi untuk cetak otomatis &amp; keluar dari tampilan tiket.</div>
     </div>
 
   </div><!-- /.ticket-modal-card -->

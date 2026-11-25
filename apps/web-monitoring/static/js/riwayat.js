@@ -1,104 +1,23 @@
 /**
  * riwayat.js — FERQUEUE Web Monitoring
- * Riwayat Page: Search, filter, pagination, export.
+ * Riwayat Page: Real API sync, stat cards, search, date/class/status filters,
+ * real pagination, CSV export, print summary, and photo lightbox.
  */
 
-import { startClock, formatNumber, API_BASE_URL } from './utils.js';
+import {
+  startClock,
+  formatNumber,
+  formatDateId,
+  escapeHtml,
+  downloadCsv,
+  toast,
+  API_BASE_URL,
+} from './utils.js';
 
-// Mock data riwayat persis seperti di Screenshot 3
-const DEFAULT_ROWS = [
-  {
-    nomor: 'FQ-2N261117-W002',
-    date: '17 Nov 2026',
-    time: '04:41:12 WIB',
-    pengemudi: 'Budi Santoso',
-    initial: 'BS',
-    petugas: 'Rian Setiawan',
-    golongan: 'Gol V B',
-    p: '7.2m',
-    t: '3.1m',
-    berat: '8.450 kg',
-    status: 'Normal',
-  },
-  {
-    nomor: 'FQ-2N261117-W001',
-    date: '17 Nov 2026',
-    time: '04:38:44 WIB',
-    pengemudi: 'Ahmad Fauzi',
-    initial: 'AF',
-    petugas: 'Dedi Kurniawan',
-    golongan: 'Gol VI B',
-    p: '12.4m',
-    t: '4.2m',
-    berat: '16.480 kg',
-    status: 'Overdimension',
-  },
-  {
-    nomor: 'FQ-2N261117-W009',
-    date: '17 Nov 2026',
-    time: '04:32:04 WIB',
-    pengemudi: 'Hendra Wijaya',
-    initial: 'HW',
-    petugas: 'Agus Pratama',
-    golongan: 'Gol IV A',
-    p: '4.8m',
-    t: '1.6m',
-    berat: '1.820 kg',
-    status: 'Normal',
-  },
-  {
-    nomor: 'FQ-2N261117-W008',
-    date: '17 Nov 2026',
-    time: '04:27:18 WIB',
-    pengemudi: 'Rudi Hermansyah',
-    initial: 'RH',
-    petugas: 'Rian Hidayat',
-    golongan: 'Gol VI A',
-    p: '11.8m',
-    t: '3.4m',
-    berat: '12.100 kg',
-    status: 'Normal',
-  },
-  {
-    nomor: 'FQ-2N261117-W007',
-    date: '17 Nov 2026',
-    time: '04:19:40 WIB',
-    pengemudi: 'Joko Pramono',
-    initial: 'JP',
-    petugas: 'Bambang SL',
-    golongan: 'Gol IV B',
-    p: '4.9m',
-    t: '1.6m',
-    berat: '2.450 kg',
-    status: 'Normal',
-  },
-  {
-    nomor: 'FQ-2N261117-W006',
-    date: '17 Nov 2026',
-    time: '04:11:02 WIB',
-    pengemudi: 'Supardi Jaya',
-    initial: 'SJ',
-    petugas: 'Felly Iswanto',
-    golongan: 'Gol VII',
-    p: '13.5m',
-    t: '3.8m',
-    berat: '24.620 kg',
-    status: 'Normal',
-  },
-];
-
-let items = [...DEFAULT_ROWS];
+let items = [];
+let filteredItems = [];
 let currentPage = 1;
-const PER_PAGE = 6;
-
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+const PER_PAGE = 10;
 
 function openPhotoDialog(item) {
   const dialog = document.getElementById('photo-preview-dialog');
@@ -118,16 +37,35 @@ function openPhotoDialog(item) {
   }
 }
 
-function renderTable(data) {
+function updateStatCards(sourceRows) {
+  const total = sourceRows.length;
+  const overweight = sourceRows.filter(r => r.status.toLowerCase().includes('over')).length;
+  const normal = total - overweight;
+  const passPct = total > 0 ? ((normal / total) * 100).toFixed(1).replace('.', ',') : '0';
+
+  const setEl = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  setEl('stat-total', formatNumber(total));
+  setEl('stat-normal', formatNumber(normal));
+  setEl('stat-normal-badge', `${passPct}% Lolos`);
+  setEl('stat-overdimensi', formatNumber(overweight));
+}
+
+function renderTable(pageRows) {
   const tbody = document.getElementById('riwayat-tbody');
   if (!tbody) return;
 
-  if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#94A3B8;">Tidak ada transaksi ditemukan</td></tr>';
+  if (!pageRows.length) {
+    const emptyMsg = items.length === 0
+      ? 'Belum ada transaksi pemeriksaan tercatat.'
+      : 'Tidak ada transaksi yang cocok dengan filter pencarian.';
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px;color:#94A3B8;">${emptyMsg}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = data.map((r, idx) => {
+  tbody.innerHTML = pageRows.map((r, idx) => {
     const isOver = r.status.toLowerCase().includes('over');
     const avatarClass = isOver ? 'cell-avatar cell-avatar--red' : 'cell-avatar';
     const dimsClass = isOver ? 'cell-dims is-danger' : 'cell-dims';
@@ -179,59 +117,130 @@ function renderTable(data) {
   tbody.querySelectorAll('.cell-photo-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = Number(btn.dataset.photoIdx);
-      if (Number.isInteger(idx) && data[idx]) {
-        openPhotoDialog(data[idx]);
+      if (Number.isInteger(idx) && pageRows[idx]) {
+        openPhotoDialog(pageRows[idx]);
       }
     });
   });
 }
 
+function buildPageList(totalPages, activePage) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  const pages = new Set([1, totalPages, activePage, activePage - 1, activePage + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('...');
+    out.push(sorted[i]);
+  }
+  return out;
+}
+
 function renderPagination(total, page) {
   const container = document.getElementById('pagination');
   const info = document.getElementById('pagination-info');
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  currentPage = safePage;
+
+  const startIdx = total === 0 ? 0 : (safePage - 1) * PER_PAGE + 1;
+  const endIdx = Math.min(total, safePage * PER_PAGE);
+
   if (info) {
-    info.textContent = `Menampilkan 1 - ${Math.min(total, PER_PAGE)} dari 1.428 transaksi terverifikasi`;
+    info.textContent = `Menampilkan ${formatNumber(startIdx)} - ${formatNumber(endIdx)} dari ${formatNumber(total)} transaksi terverifikasi`;
   }
   if (!container) return;
 
+  const pageTokens = buildPageList(totalPages, safePage);
+  const buttonsHtml = pageTokens.map(token => {
+    if (token === '...') {
+      return '<span style="padding: 0 4px; color: #94A3B8;">...</span>';
+    }
+    const activeCls = token === safePage ? ' is-active' : '';
+    return `<button type="button" class="riwayat-page-btn${activeCls}" data-page="${token}">${token}</button>`;
+  }).join('');
+
   container.innerHTML = `
-    <button class="riwayat-page-btn-text" ${page === 1 ? 'disabled' : ''}>‹ Sebelumnya</button>
-    <button class="riwayat-page-btn is-active">1</button>
-    <button class="riwayat-page-btn">2</button>
-    <button class="riwayat-page-btn">3</button>
-    <span style="padding: 0 4px; color: #94A3B8;">...</span>
-    <button class="riwayat-page-btn">143</button>
-    <button class="riwayat-page-btn-text">Selanjutnya ›</button>
+    <button type="button" class="riwayat-page-btn-text" data-page="${safePage - 1}" ${safePage <= 1 ? 'disabled' : ''}>‹ Sebelumnya</button>
+    ${buttonsHtml}
+    <button type="button" class="riwayat-page-btn-text" data-page="${safePage + 1}" ${safePage >= totalPages ? 'disabled' : ''}>Selanjutnya ›</button>
   `;
+
+  container.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = Number(btn.dataset.page);
+      if (Number.isInteger(target) && target >= 1 && target <= totalPages && target !== currentPage) {
+        currentPage = target;
+        renderCurrentPage();
+      }
+    });
+  });
 }
 
-function filterData() {
+function renderCurrentPage() {
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PER_PAGE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PER_PAGE;
+  const pageRows = filteredItems.slice(start, start + PER_PAGE);
+  renderTable(pageRows);
+  renderPagination(filteredItems.length, currentPage);
+}
+
+function isSameWibDay(tsA, tsB) {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });
+  return fmt.format(new Date(tsA)) === fmt.format(new Date(tsB));
+}
+
+function filterData({ resetPage = true } = {}) {
   const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+  const dateRange = document.getElementById('filter-tanggal')?.value || '';
   const gol = document.getElementById('filter-golongan')?.value || '';
   const st = document.getElementById('filter-status')?.value || '';
+  const nowMs = Date.now();
 
-  const filtered = items.filter(r => {
-    const textMatch = !query || r.nomor.toLowerCase().includes(query) || r.pengemudi.toLowerCase().includes(query);
-    const golMatch = !gol || r.golongan.includes(gol);
+  filteredItems = items.filter(r => {
+    const textMatch = !query ||
+      r.nomor.toLowerCase().includes(query) ||
+      r.idPemeriksaan.toLowerCase().includes(query) ||
+      r.pengemudi.toLowerCase().includes(query) ||
+      r.petugas.toLowerCase().includes(query) ||
+      r.jenis.toLowerCase().includes(query);
+
+    const golMatch = !gol || r.golongan.toLowerCase() === gol.toLowerCase();
     const stMatch = !st || r.status.toLowerCase() === st.toLowerCase();
-    return textMatch && golMatch && stMatch;
+
+    let dateMatch = true;
+    if (dateRange && Number.isFinite(r.timestampMs)) {
+      if (dateRange === 'today') {
+        dateMatch = isSameWibDay(r.timestampMs, nowMs);
+      } else {
+        const days = Number(dateRange);
+        if (Number.isFinite(days) && days > 0) {
+          dateMatch = (nowMs - r.timestampMs) <= days * 24 * 60 * 60 * 1000;
+        }
+      }
+    }
+
+    return textMatch && golMatch && stMatch && dateMatch;
   });
 
-  renderTable(filtered);
+  if (resetPage) currentPage = 1;
+  renderCurrentPage();
 }
 
-function exportExcel() {
-  const headers = ['No. Tiket', 'Tanggal', 'Waktu', 'Pengemudi', 'Petugas', 'Golongan', 'Panjang', 'Tinggi', 'Berat', 'Status'];
-  const rows = items.map(r => [
-    r.nomor, r.date, r.time, r.pengemudi, r.petugas, r.golongan, r.p, r.t, r.berat, r.status
+function exportCsv() {
+  if (!filteredItems.length) {
+    toast('Tidak ada data riwayat untuk diekspor.', 'info');
+    return;
+  }
+  const headers = ['No. Tiket', 'ID Pemeriksaan', 'Tanggal', 'Waktu', 'Pengemudi', 'Petugas', 'Golongan', 'Panjang', 'Tinggi', 'Berat', 'Status'];
+  const rows = filteredItems.map(r => [
+    r.nomor, r.idPemeriksaan, r.date, r.time, r.pengemudi, r.petugas, r.golongan, r.p, r.t, r.berat, r.status,
   ]);
-  const csv = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `riwayat_tiket_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
+  downloadCsv(`riwayat_tiket_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  toast(`Ekspor CSV berhasil (${filteredItems.length} baris).`, 'success');
 }
 
 function updateClock() {
@@ -239,54 +248,59 @@ function updateClock() {
   const time = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
   const el = document.getElementById('riwayat-clock');
   if (el) el.textContent = `${time} WIB`;
+
+  const optToday = document.getElementById('opt-today');
+  if (optToday) optToday.textContent = `Hari Ini (${formatDateId(now)})`;
 }
 
 async function fetchFromApi() {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/tiket`);
+    const res = await fetch(`${API_BASE_URL}/api/riwayat`, { cache: 'no-store' });
     if (res.ok) {
       const payload = await res.json();
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
-      if (rows.length > 0) {
-        const mapped = rows.map((t, idx) => {
-          const driver = t.nama_pengemudi || t.pengemudi || 'Pengemudi';
-          const rawTime = t.waktu_pemeriksaan || t.waktu || Date.now();
-          const dt = new Date(typeof rawTime === 'string' ? rawTime.replace(' ', 'T') : rawTime);
-          const validDate = !Number.isNaN(dt.getTime());
-          const dateStr = validDate
-            ? dt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-            : 'Hari ini';
-          const timeStr = validDate
-            ? dt.toLocaleTimeString('en-GB', { hour12: false }) + ' WIB'
-            : '-';
-          const pVal = t.panjang_cm ?? t.P;
-          const tVal = t.tinggi_cm ?? t.T;
-          const beratVal = Number(t.berat_aktual_gram ?? t.berat_gram ?? t.berat ?? 0);
-          const isOver = String(t.status || '').toLowerCase().includes('over');
+      items = rows.map((t, idx) => {
+        const driver = t.nama_pengemudi || t.pengemudi || 'Pengemudi';
+        const rawTime = t.waktu_pemeriksaan || t.waktu || '';
+        const dt = rawTime ? new Date(typeof rawTime === 'string' ? rawTime.replace(' ', 'T') : rawTime) : null;
+        const validDate = dt && !Number.isNaN(dt.getTime());
+        const dateStr = validDate
+          ? dt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '—';
+        const timeStr = validDate
+          ? dt.toLocaleTimeString('en-GB', { hour12: false }) + ' WIB'
+          : '—';
+        const pVal = t.panjang_cm ?? t.P;
+        const tVal = t.tinggi_cm ?? t.T;
+        const beratVal = Number(t.berat_aktual_gram ?? t.berat_gram ?? t.berat ?? 0);
+        const isOver = String(t.status || '').toLowerCase().includes('over');
+        const idPem = t.id_pemeriksaan || `CHK-${String(idx + 1).padStart(3, '0')}`;
 
-          return {
-            nomor: t.nomor_tiket || t.nomor || t.id_pemeriksaan || `CHK-${String(idx + 1).padStart(3, '0')}`,
-            date: dateStr,
-            time: timeStr,
-            pengemudi: driver,
-            initial: driver.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'OP',
-            petugas: 'Petugas Gate',
-            golongan: t.golongan ? `Gol ${t.golongan}` : 'Gol A',
-            p: pVal !== undefined && pVal !== null ? `${Number(pVal).toFixed(1)} cm` : '—',
-            t: tVal !== undefined && tVal !== null ? `${Number(tVal).toFixed(1)} cm` : '—',
-            berat: `${beratVal.toFixed(1).replace('.', ',')} g`,
-            status: isOver ? 'Overweight' : 'Normal',
-            foto_url: t.foto_url || null,
-          };
-        });
-        items = [...mapped, ...DEFAULT_ROWS];
-      }
+        return {
+          idPemeriksaan: idPem,
+          nomor: t.nomor_tiket || t.nomor || idPem,
+          date: dateStr,
+          time: timeStr,
+          timestampMs: validDate ? dt.getTime() : NaN,
+          pengemudi: driver,
+          initial: driver.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'OP',
+          petugas: t.nama_petugas || 'Operator',
+          jenis: t.jenis_kendaraan || 'Kendaraan',
+          golongan: t.golongan ? `Gol ${t.golongan}` : 'Gol A',
+          p: pVal !== undefined && pVal !== null && Number(pVal) > 0 ? `${Number(pVal).toFixed(1)} cm` : '—',
+          t: tVal !== undefined && tVal !== null && Number(tVal) > 0 ? `${Number(tVal).toFixed(1)} cm` : '—',
+          berat: `${beratVal.toFixed(1).replace('.', ',')} g`,
+          status: isOver ? 'Overweight' : 'Normal',
+          foto_url: t.foto_url || null,
+        };
+      });
     }
   } catch (err) {
-    console.warn('[riwayat] Memakai data default:', err);
+    console.warn('[riwayat] Gagal memuat riwayat dari API:', err);
   }
-  filterData();
-  renderPagination(items.length, 1);
+
+  updateStatCards(items);
+  filterData({ resetPage: false });
 }
 
 function init() {
@@ -295,6 +309,7 @@ function init() {
   setInterval(updateClock, 1000);
 
   fetchFromApi();
+  setInterval(fetchFromApi, 15000);
 
   const photoDialog = document.getElementById('photo-preview-dialog');
   document.getElementById('btn-close-photo-dialog')?.addEventListener('click', () => {
@@ -304,20 +319,28 @@ function init() {
     if (e.target === photoDialog) photoDialog.close();
   });
 
-  document.getElementById('search-input')?.addEventListener('input', filterData);
-  document.getElementById('filter-golongan')?.addEventListener('change', filterData);
-  document.getElementById('filter-status')?.addEventListener('change', filterData);
+  document.getElementById('search-input')?.addEventListener('input', () => filterData({ resetPage: true }));
+  document.getElementById('filter-tanggal')?.addEventListener('change', () => filterData({ resetPage: true }));
+  document.getElementById('filter-golongan')?.addEventListener('change', () => filterData({ resetPage: true }));
+  document.getElementById('filter-status')?.addEventListener('change', () => filterData({ resetPage: true }));
+
   document.getElementById('btn-reset-filter')?.addEventListener('click', () => {
     const s = document.getElementById('search-input');
+    const d = document.getElementById('filter-tanggal');
     const g = document.getElementById('filter-golongan');
     const st = document.getElementById('filter-status');
     if (s) s.value = '';
+    if (d) d.value = '';
     if (g) g.value = '';
     if (st) st.value = '';
-    filterData();
+    filterData({ resetPage: true });
   });
 
-  document.getElementById('btn-export')?.addEventListener('click', exportExcel);
+  document.getElementById('btn-print-riwayat')?.addEventListener('click', () => {
+    window.print();
+  });
+
+  document.getElementById('btn-export')?.addEventListener('click', exportCsv);
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .dataset import validate_ratios
 
-DEFAULT_CONFIG = 'apps/computer-vision/configs/receiver-v3.json'
+DEFAULT_CONFIG = 'apps/computer-vision/configs/receiver-v4.json'
 DISPLAY_KEYS = {'confidence_threshold', 'nms_iou_threshold', 'max_detections', 'class_agnostic_nms'}
 
 

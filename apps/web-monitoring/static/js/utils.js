@@ -1,11 +1,23 @@
 /**
  * utils.js — FERQUEUE Web Monitoring
- * Shared utilities: clock, number formatting, toast notifications.
+ * Shared utilities: clock, date/shift helpers, number/CSV formatting, topbar live sync, toast notifications.
  * Gunakan sebagai ES module (type="module").
  */
 
 // Base URL untuk semua API calls
 export const API_BASE_URL = window.location.origin;
+
+// ----------------------------------------------------------------
+// HTML ESCAPING
+// ----------------------------------------------------------------
+export function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // ----------------------------------------------------------------
 // FORMAT WAKTU (locale Indonesia / WIB)
@@ -38,6 +50,22 @@ const _dayFmt = new Intl.DateTimeFormat('id-ID', {
   month: 'short',
 });
 
+export function formatDateId(date = new Date()) {
+  return _dateFmt.format(date);
+}
+
+export function getCurrentShiftWib(date = new Date()) {
+  const hourStr = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    hour12: false,
+  }).format(date);
+  const hour = Number(hourStr) % 24;
+  if (hour < 8) return 'Shift 1 (00:00 - 08:00)';
+  if (hour < 16) return 'Shift 2 (08:00 - 16:00)';
+  return 'Shift 3 (16:00 - 24:00)';
+}
+
 /**
  * Format tanggal lengkap untuk topbar.
  * Contoh: "17 Nov 2026 · 15:40:46 WIB"
@@ -55,13 +83,152 @@ export function formatSidebarClock(date = new Date()) {
 }
 
 // ----------------------------------------------------------------
+// TOPBAR LIVE STATUS & DROPDOWN MENUS
+// ----------------------------------------------------------------
+let _topbarInitialized = false;
+let _topbarInterval = null;
+
+async function syncTopbarStatus() {
+  const gatePill = document.getElementById('topbar-gate-pill');
+  const scalePill = document.getElementById('topbar-scale-pill');
+  const cvPill = document.getElementById('topbar-cv-pill');
+  const notifBadge = document.getElementById('topbar-notif-badge');
+  const notifList = document.getElementById('topbar-notif-list');
+
+  if (!gatePill && !scalePill && !cvPill && !notifBadge && !notifList) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/system-status`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const isLive = Boolean(data.sensor_live);
+    const gerbang = String(data.gerbang || 'tutup').toLowerCase();
+    const isOpen = gerbang.includes('buka') || gerbang.includes('open');
+
+    if (gatePill) {
+      gatePill.textContent = isOpen ? 'Gerbang Terbuka' : (isLive ? 'Gerbang Tertutup' : 'Gerbang: Standby');
+      gatePill.classList.toggle('is-open-gate', isOpen);
+    }
+
+    if (scalePill) {
+      scalePill.textContent = isLive ? 'Sensor Timbangan OK' : 'Timbangan: Standby';
+      scalePill.classList.toggle('is-standby', !isLive);
+      scalePill.classList.remove('is-offline');
+    }
+
+    if (cvPill) {
+      const cvOnline = Boolean(data.cv_online);
+      cvPill.textContent = cvOnline ? 'Kamera PCV Aktif' : 'Kamera PCV: Standby';
+      cvPill.classList.toggle('is-standby', !cvOnline);
+      cvPill.classList.remove('is-offline');
+    }
+
+    const list = Array.isArray(data.overweight_recent) ? data.overweight_recent : [];
+    const totalOver = Number(data.overweight_count ?? list.length);
+    if (notifBadge) {
+      notifBadge.textContent = String(totalOver > 99 ? '99+' : totalOver);
+      notifBadge.hidden = totalOver === 0;
+    }
+    if (notifList) {
+      if (list.length === 0) {
+        notifList.innerHTML = '<p class="topbar__popover-empty">Tidak ada peringatan Overweight saat ini.</p>';
+      } else {
+        notifList.innerHTML = list.slice(0, 5).map(item => `
+          <a href="/ai-assistant" class="topbar__notif-item">
+            <div class="topbar__notif-item-top">
+              <span>${escapeHtml(item.id_pemeriksaan || 'Overweight')}</span>
+              <span>+${escapeHtml(item.kelebihan_berat_gram ?? 0)} g</span>
+            </div>
+            <div class="topbar__notif-item-meta">
+              ${escapeHtml(item.nama_pengemudi || 'Pengemudi')} · ${escapeHtml(item.jenis_kendaraan || 'Kendaraan')} (Gol. ${escapeHtml(item.golongan || '-')})
+            </div>
+          </a>
+        `).join('');
+      }
+    }
+  } catch {
+    if (scalePill) {
+      scalePill.textContent = 'Timbangan: Offline';
+      scalePill.classList.remove('is-standby');
+      scalePill.classList.add('is-offline');
+    }
+    if (cvPill) {
+      cvPill.textContent = 'Kamera PCV: Offline';
+      cvPill.classList.remove('is-standby');
+      cvPill.classList.add('is-offline');
+    }
+    if (notifList) {
+      notifList.innerHTML = '<p class="topbar__popover-empty">Gagal memuat notifikasi.</p>';
+    }
+  }
+}
+
+export function initTopbar() {
+  if (_topbarInitialized) return;
+  _topbarInitialized = true;
+
+  const notifBtn = document.getElementById('btn-topbar-notif');
+  const notifPanel = document.getElementById('topbar-notif-panel');
+  const appsBtn = document.getElementById('btn-topbar-apps');
+  const appsPanel = document.getElementById('topbar-apps-panel');
+
+  const closeAll = () => {
+    if (notifPanel) notifPanel.hidden = true;
+    if (appsPanel) appsPanel.hidden = true;
+    notifBtn?.setAttribute('aria-expanded', 'false');
+    appsBtn?.setAttribute('aria-expanded', 'false');
+  };
+
+  notifBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = notifPanel ? notifPanel.hidden : false;
+    closeAll();
+    if (opening && notifPanel) {
+      notifPanel.hidden = false;
+      notifBtn.setAttribute('aria-expanded', 'true');
+      syncTopbarStatus();
+    }
+  });
+
+  appsBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = appsPanel ? appsPanel.hidden : false;
+    closeAll();
+    if (opening && appsPanel) {
+      appsPanel.hidden = false;
+      appsBtn.setAttribute('aria-expanded', 'true');
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!(target instanceof Node)) return;
+    if (
+      (notifPanel && !notifPanel.hidden && !notifPanel.contains(target) && !notifBtn?.contains(target)) ||
+      (appsPanel && !appsPanel.hidden && !appsPanel.contains(target) && !appsBtn?.contains(target))
+    ) {
+      closeAll();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAll();
+  });
+
+  syncTopbarStatus();
+  if (_topbarInterval) clearInterval(_topbarInterval);
+  _topbarInterval = setInterval(syncTopbarStatus, 10000);
+}
+
+// ----------------------------------------------------------------
 // UPDATE CLOCK — dipanggil tiap detik
 // ----------------------------------------------------------------
 let _clockInterval = null;
 
 /**
- * Mulai update clock otomatis pada elemen #topbar-clock dan #sidebar-clock.
- * Panggil sekali saat DOMContentLoaded.
+ * Mulai update clock otomatis pada elemen #topbar-clock, #sidebar-clock, #sidebar-sync-clock
+ * serta aktifkan sinkronisasi topbar.
  */
 export function startClock() {
   function tick() {
@@ -76,9 +243,10 @@ export function startClock() {
       syncClock.textContent = `${timePart} UTC+7`;
     }
   }
-  tick(); // langsung tampilkan
+  tick();
   if (_clockInterval) clearInterval(_clockInterval);
   _clockInterval = setInterval(tick, 1000);
+  initTopbar();
 }
 
 // ----------------------------------------------------------------
@@ -86,24 +254,11 @@ export function startClock() {
 // ----------------------------------------------------------------
 const _numFmt = new Intl.NumberFormat('id-ID');
 
-/**
- * Format angka ke format ribuan Indonesia.
- * Contoh: formatNumber(1428) → "1.428"
- * @param {number} n
- * @returns {string}
- */
 export function formatNumber(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '0';
   return _numFmt.format(Number(n));
 }
 
-/**
- * Format berat dalam gram ke format Indonesia.
- * Contoh: formatWeight(8450) → "8.450"
- * @param {number} grams
- * @param {number} [fractionDigits=0]
- * @returns {string}
- */
 export function formatWeight(grams, fractionDigits = 0) {
   if (grams === null || grams === undefined || Number.isNaN(Number(grams))) return '0';
   return new Intl.NumberFormat('id-ID', {
@@ -112,12 +267,6 @@ export function formatWeight(grams, fractionDigits = 0) {
   }).format(Number(grams));
 }
 
-/**
- * Format ISO datetime string ke tampilan lokal.
- * Contoh: "2026-11-17T05:32:00" → "17 Nov 2026 · 05:32:00 WIB"
- * @param {string} isoString
- * @returns {string}
- */
 export function formatDateTime(isoString) {
   if (!isoString) return '—';
   const d = new Date(isoString);
@@ -126,19 +275,30 @@ export function formatDateTime(isoString) {
 }
 
 // ----------------------------------------------------------------
+// CSV EXPORT HELPER (dengan UTF-8 BOM dan escaping aman)
+// ----------------------------------------------------------------
+export function downloadCsv(filename, headers, rows) {
+  const escapeCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+  const lines = [
+    headers.map(escapeCell).join(','),
+    ...rows.map(row => row.map(escapeCell).join(',')),
+  ];
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ----------------------------------------------------------------
 // TOAST NOTIFICATION
 // ----------------------------------------------------------------
-let _toastTimer = null;
-
-/**
- * Tampilkan toast notification sementara.
- * @param {string} message  Pesan yang ditampilkan
- * @param {'info'|'success'|'error'|'warning'} [type='info']
- * @param {number} [duration=4000]  Durasi dalam ms
- */
 export function toast(message, type = 'info', duration = 4000) {
-  // Cari atau buat elemen toast
-  let container = document.getElementById('fq-toast-container');
+  let container = document.getElementById('toast-container') || document.getElementById('fq-toast-container');
   if (!container) {
     container = document.createElement('div');
     container.id = 'fq-toast-container';
@@ -163,8 +323,8 @@ export function toast(message, type = 'info', duration = 4000) {
   };
   const palette = colors[type] || colors.info;
 
-  const toast = document.createElement('div');
-  Object.assign(toast.style, {
+  const toastEl = document.createElement('div');
+  Object.assign(toastEl.style, {
     background: palette.bg,
     borderLeft: `4px solid ${palette.border}`,
     color: '#F8FAFC',
@@ -182,32 +342,29 @@ export function toast(message, type = 'info', duration = 4000) {
     transform: 'translateX(20px)',
     transition: 'opacity 0.2s ease, transform 0.2s ease',
   });
-  toast.innerHTML = `<span>${palette.icon}</span><span>${message}</span>`;
-  container.appendChild(toast);
 
-  // Animasi masuk
+  const iconSpan = document.createElement('span');
+  iconSpan.textContent = palette.icon;
+  const textSpan = document.createElement('span');
+  textSpan.textContent = String(message ?? '');
+  toastEl.append(iconSpan, textSpan);
+  container.appendChild(toastEl);
+
   requestAnimationFrame(() => {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateX(0)';
+    toastEl.style.opacity = '1';
+    toastEl.style.transform = 'translateX(0)';
   });
 
-  // Auto-remove
   setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(20px)';
-    setTimeout(() => toast.remove(), 250);
+    toastEl.style.opacity = '0';
+    toastEl.style.transform = 'translateX(20px)';
+    setTimeout(() => toastEl.remove(), 250);
   }, duration);
 }
 
 // ----------------------------------------------------------------
 // FETCH HELPER
 // ----------------------------------------------------------------
-/**
- * Fetch JSON dari endpoint dengan error handling.
- * @param {string} url
- * @param {RequestInit} [options]
- * @returns {Promise<any>}
- */
 export async function fetchJSON(url, options = {}) {
   const res = await fetch(url, { cache: 'no-store', ...options });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);

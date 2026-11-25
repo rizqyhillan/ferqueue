@@ -68,3 +68,4 @@ models/mobilenet/*
 !models/mobilenet/.gitkeep
 agents.md
 apps/catatan
+apps/computer-vision/configs/archive/

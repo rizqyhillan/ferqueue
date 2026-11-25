@@ -15,20 +15,20 @@
 <div class="page-header-row">
   <div class="page-header-left">
     <h1 class="page-title">Ringkasan Operasional Hari Ini</h1>
-    <p class="page-subtitle">Monitoring throughput kendaraan, rerata dimensi, tonase terintegrasi, dan rekap tiket.</p>
+    <p class="page-subtitle">Monitoring throughput kendaraan, rerata dimensi, berat terintegrasi, dan rekap tiket.</p>
   </div>
   <div class="page-header-right">
     <div class="badge-header">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
-      <span>Tanggal Operasi <strong>17 Nov 2026</strong></span>
+      <span>Tanggal Operasi <strong id="dash-op-date">—</strong></span>
     </div>
     <div class="badge-header">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
       </svg>
-      <span>Shift Aktif <strong>Shift 1 (00:00 - 08:00)</strong></span>
+      <span>Shift Aktif <strong id="dash-op-shift">—</strong></span>
     </div>
   </div>
 </div>
@@ -47,12 +47,12 @@
       </div>
     </div>
     <div class="dash-stat-card__val-row">
-      <span class="dash-stat-card__val" id="stat-total">1.428</span>
+      <span class="dash-stat-card__val" id="stat-total">0</span>
       <span class="dash-stat-card__unit">unit</span>
     </div>
-    <div class="dash-stat-card__bottom is-green">
+    <div class="dash-stat-card__bottom is-green" id="stat-gate-wrap">
       <span class="dash-stat-card__dot"></span>
-      <span>Gerbang Normal</span>
+      <span id="stat-gate-status">Gerbang Normal</span>
     </div>
   </div>
 
@@ -68,11 +68,11 @@
       </div>
     </div>
     <div class="dash-stat-card__val-row">
-      <span class="dash-stat-card__val" id="stat-truk">642</span>
+      <span class="dash-stat-card__val" id="stat-truk">0</span>
       <span class="dash-stat-card__unit">unit</span>
     </div>
     <div class="dash-stat-card__bottom">
-      <span>45% dari total</span>
+      <span id="stat-truk-pct">0% dari total</span>
     </div>
   </div>
 
@@ -88,11 +88,11 @@
       </div>
     </div>
     <div class="dash-stat-card__val-row">
-      <span class="dash-stat-card__val" id="stat-bus">318</span>
+      <span class="dash-stat-card__val" id="stat-bus">0</span>
       <span class="dash-stat-card__unit">unit</span>
     </div>
     <div class="dash-stat-card__bottom">
-      <span>22% dari total</span>
+      <span id="stat-bus-pct">0% dari total</span>
     </div>
   </div>
 
@@ -108,11 +108,11 @@
       </div>
     </div>
     <div class="dash-stat-card__val-row">
-      <span class="dash-stat-card__val" id="stat-mobil">468</span>
+      <span class="dash-stat-card__val" id="stat-mobil">0</span>
       <span class="dash-stat-card__unit">unit</span>
     </div>
     <div class="dash-stat-card__bottom">
-      <span>33% dari total</span>
+      <span id="stat-mobil-pct">0% dari total</span>
     </div>
   </div>
 </div>
@@ -127,7 +127,7 @@
         </svg>
         Tren Kepadatan Kendaraan per Jam
       </h2>
-      <p class="card__subtitle">Analisis jam sibuk throughput kendaraan masuk dermaga (00:00 - 24:00)</p>
+      <p class="card__subtitle">Analisis distribusi throughput kendaraan masuk dermaga per interval 2 jam (00:00 - 24:00)</p>
     </div>
     <div class="dash-chart-header-right">
       <div class="dash-chart-legend">
@@ -157,12 +157,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
         </svg>
-        <span>Rata-rata throughput normal: <strong>59,5 unit/jam</strong></span>
+        <span>Rata-rata throughput: <strong id="dash-avg-throughput">0,0 unit/jam</strong></span>
       </div>
-      <span>Throughput saat ini: <strong>46 unit/jam (Stabil)</strong></span>
+      <span>Jam berjalan: <strong id="dash-cur-throughput">0 unit</strong></span>
     </div>
     <div>
-      <span>Pembaruan otomatis tiap interval 15 menit</span>
+      <span id="dash-last-updated">Pembaruan otomatis tiap 10 detik</span>
     </div>
   </div>
 </div>
@@ -178,7 +178,7 @@
           <span class="card__badge-num">01</span>
           Statistik Rata-rata Pengukuran
         </h2>
-        <p class="card__subtitle">Data panjang, tinggi, &amp; berat per kategori</p>
+        <p class="card__subtitle">Data rata-rata panjang, tinggi, &amp; berat per golongan dari hasil pemeriksaan</p>
       </div>
     </div>
     <div class="card__body">
@@ -193,20 +193,20 @@
               </svg>
               Truk
             </span>
-            <span class="avg-category-badge">Gol V - VIII</span>
+            <span class="avg-category-badge">Gol. C · Maks 100 g</span>
           </div>
           <div class="avg-category-boxes">
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Panjang</span>
-              <span class="avg-category-box-val">10.4 m</span>
+              <span class="avg-category-box-val" id="avg-truk-p">—</span>
             </div>
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Tinggi</span>
-              <span class="avg-category-box-val">3.8 m</span>
+              <span class="avg-category-box-val" id="avg-truk-t">—</span>
             </div>
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Berat</span>
-              <span class="avg-category-box-val">18.2 ton</span>
+              <span class="avg-category-box-val" id="avg-truk-w">—</span>
             </div>
           </div>
         </div>
@@ -221,25 +221,25 @@
               </svg>
               Bus
             </span>
-            <span class="avg-category-badge">Gol IVB - VB</span>
+            <span class="avg-category-badge">Gol. B · Maks 85 g</span>
           </div>
           <div class="avg-category-boxes">
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Panjang</span>
-              <span class="avg-category-box-val">11.2 m</span>
+              <span class="avg-category-box-val" id="avg-bus-p">—</span>
             </div>
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Tinggi</span>
-              <span class="avg-category-box-val">3.4 m</span>
+              <span class="avg-category-box-val" id="avg-bus-t">—</span>
             </div>
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Berat</span>
-              <span class="avg-category-box-val">12.5 ton</span>
+              <span class="avg-category-box-val" id="avg-bus-w">—</span>
             </div>
           </div>
         </div>
 
-        <!-- Mobil Pribadi -->
+        <!-- Mobil -->
         <div class="avg-category-item">
           <div class="avg-category-top">
             <span class="avg-category-name">
@@ -247,22 +247,22 @@
                 <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-2"/>
                 <circle cx="9" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
               </svg>
-              Mobil Pribadi
+              Mobil
             </span>
-            <span class="avg-category-badge">Gol IVA</span>
+            <span class="avg-category-badge">Gol. A · Maks 55 g</span>
           </div>
           <div class="avg-category-boxes">
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Panjang</span>
-              <span class="avg-category-box-val">4.4 m</span>
+              <span class="avg-category-box-val" id="avg-mobil-p">—</span>
             </div>
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Tinggi</span>
-              <span class="avg-category-box-val">1.8 m</span>
+              <span class="avg-category-box-val" id="avg-mobil-t">—</span>
             </div>
             <div class="avg-category-box">
               <span class="avg-category-box-lbl">Berat</span>
-              <span class="avg-category-box-val">1.6 ton</span>
+              <span class="avg-category-box-val" id="avg-mobil-w">—</span>
             </div>
           </div>
         </div>
@@ -278,19 +278,19 @@
           <span class="card__badge-num">02</span>
           Aktivitas Lintasan Terbaru
         </h2>
-        <p class="card__subtitle">Log transaksi pemeriksaan sensor dimensi &amp; penimbangan</p>
+        <p class="card__subtitle">Log transaksi pemeriksaan sensor dimensi &amp; penimbangan terbaru</p>
       </div>
-      <span class="dash-stat-card__bottom is-green">
+      <a href="/riwayat" class="dash-stat-card__bottom is-green" title="Lihat seluruh riwayat">
         <span class="dash-stat-card__dot"></span>
         Auto Refresh
-      </span>
+      </a>
     </div>
     <div class="card__body p-0">
       <div class="activity-table-wrap">
         <table class="activity-table">
           <thead>
             <tr>
-              <th>NO. UNIT</th>
+              <th>NO. TIKET / ID</th>
               <th>KATEGORI</th>
               <th>PANJANG</th>
               <th>TINGGI</th>
@@ -300,60 +300,8 @@
             </tr>
           </thead>
           <tbody id="activity-tbody">
-            <!-- Populated by dashboard.js -->
             <tr>
-              <td><span class="activity-unit">unit #18062</span></td>
-              <td>Truk</td>
-              <td class="activity-dim">11.95 m</td>
-              <td class="activity-dim">3.78 m</td>
-              <td class="activity-berat">20.450 kg</td>
-              <td class="activity-waktu">06:30 WIB</td>
-              <td><span class="activity-status-pill activity-status-pill--terbit">Tiket Terbit</span></td>
-            </tr>
-            <tr>
-              <td><span class="activity-unit">unit #18061</span></td>
-              <td>Bus</td>
-              <td class="activity-dim">11.10 m</td>
-              <td class="activity-dim">3.45 m</td>
-              <td class="activity-berat">14.120 kg</td>
-              <td class="activity-waktu">06:27 WIB</td>
-              <td><span class="activity-status-pill activity-status-pill--lolos">Lolos</span></td>
-            </tr>
-            <tr>
-              <td><span class="activity-unit">unit #18060</span></td>
-              <td>Mobil</td>
-              <td class="activity-dim">4.40 m</td>
-              <td class="activity-dim">1.65 m</td>
-              <td class="activity-berat">1.850 kg</td>
-              <td class="activity-waktu">06:24 WIB</td>
-              <td><span class="activity-status-pill activity-status-pill--terbit">Tiket Terbit</span></td>
-            </tr>
-            <tr>
-              <td><span class="activity-unit">unit #18059</span></td>
-              <td>Truk</td>
-              <td class="activity-dim">9.80 m</td>
-              <td class="activity-dim">3.50 m</td>
-              <td class="activity-berat">16.700 kg</td>
-              <td class="activity-waktu">06:22 WIB</td>
-              <td><span class="activity-status-pill activity-status-pill--lolos">Lolos</span></td>
-            </tr>
-            <tr>
-              <td><span class="activity-unit">unit #18058</span></td>
-              <td>Mobil</td>
-              <td class="activity-dim">4.25 m</td>
-              <td class="activity-dim">1.55 m</td>
-              <td class="activity-berat">1.620 kg</td>
-              <td class="activity-waktu">06:19 WIB</td>
-              <td><span class="activity-status-pill activity-status-pill--lolos">Lolos</span></td>
-            </tr>
-            <tr>
-              <td><span class="activity-unit">unit #18057</span></td>
-              <td>Bus</td>
-              <td class="activity-dim">11.10 m</td>
-              <td class="activity-dim">3.45 m</td>
-              <td class="activity-berat">12.800 kg</td>
-              <td class="activity-waktu">06:14 WIB</td>
-              <td><span class="activity-status-pill activity-status-pill--terbit">Tiket Terbit</span></td>
+              <td colspan="7" style="text-align: center; padding: 28px; color: #94A3B8;">Memuat aktivitas lintasan...</td>
             </tr>
           </tbody>
         </table>
@@ -365,8 +313,10 @@
 
 <!-- Footer Info -->
 <div class="page-footer-info">
-  <span>Sistem Integrasi Penimbangan Pelabuhan PT ASDP Indonesia Ferry • Versi v1.0.4 Enterprise</span>
-  <span>Gate Kode 05 Aktif • Unduh Rekap Laporan Shift</span>
+  <span>Sistem Integrasi Penimbangan Pelabuhan PT ASDP Indonesia Ferry • FERQUEUE</span>
+  <button type="button" id="btn-download-shift-report" class="footer-action-link">
+    Unduh Rekap Laporan Shift (CSV)
+  </button>
 </div>
 {% endblock %}
 

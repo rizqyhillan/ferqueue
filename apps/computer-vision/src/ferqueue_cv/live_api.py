@@ -14,11 +14,8 @@ from .postprocessing import select_detections
 from .settings import DEFAULT_CONFIG, load_config
 from .side_measurement import (
     CAMERA_GEOMETRY_HEADER,
-    COIN_REGION_HEADER,
-    estimate_side,
     estimate_side_from_geometry,
     parse_camera_geometry,
-    parse_coin_region,
 )
 from .training import detect, load_detector
 
@@ -61,11 +58,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({'error': 'Kirim gambar melalui web /api/detect.'}, 403)
         if self.headers.get('Content-Type', '').split(';')[0] not in {'image/jpeg', 'image/png', 'image/webp'}:
             return self.reply({'error': 'Kirim gambar JPG, PNG, atau WebP.'}, 415)
-        region = self.headers.get(COIN_REGION_HEADER)
-        try:
-            region = parse_coin_region(region) if region is not None else None
-        except ValueError:
-            return self.reply({'error': 'Area koin harus berupa kotak di dalam gambar.'}, 400)
         geometry = self.headers.get(CAMERA_GEOMETRY_HEADER)
         try:
             geometry = parse_camera_geometry(geometry) if geometry is not None else None
@@ -99,12 +91,7 @@ class Handler(BaseHTTPRequestHandler):
         payload = {'detections': detections, 'inference_ms': round((perf_counter() - started) * 1000)}
         if detector is None:
             payload['calibration_only'] = True
-        if region is not None:
-            try:
-                payload['calibration'] = estimate_side(image, region, detections)
-            except ImportError:
-                payload['calibration'] = {'status': 'unavailable'}
-        elif geometry is not None:
+        if geometry is not None:
             payload['calibration'] = estimate_side_from_geometry(image, geometry, detections)
         self.reply(payload)
 
@@ -112,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
 def serve(config, root, host='127.0.0.1', port=8000, *, calibration_only=False):
     context = {'config': config, 'detector': None}
     if calibration_only:
-        print('Mode kalibrasi koin.', flush=True)
+        print('Mode kalibrasi geometri kamera.', flush=True)
     else:
         print('Memuat model...', flush=True)
         detector, frozen, metadata = load_detector(config, root)

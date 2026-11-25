@@ -1,9 +1,11 @@
 import base64
 import os
 import re
+import socket
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlparse
 from flask import (
     Flask,
     jsonify,
@@ -223,6 +225,52 @@ def resolve_capture_url(record: dict) -> dict:
     return item
 
 
+def normalize_record(record: dict) -> dict:
+    """Samakan struktur record dari MySQL maupun fallback in-memory."""
+    item = resolve_capture_url(record)
+    waktu = item.get("waktu_pemeriksaan") or item.get("waktu") or ""
+    item["waktu"] = waktu
+    item["waktu_pemeriksaan"] = waktu
+    if "nama_petugas" not in item or not item.get("nama_petugas"):
+        item["nama_petugas"] = "Operator"
+    return item
+
+
+def get_all_records(limit: int = 500) -> list[dict]:
+    """Ambil data pemeriksaan terbaru dari MySQL atau fallback in-memory."""
+    data_db = ambil_semua_riwayat(limit=limit)
+    records = data_db if data_db else riwayat_pemeriksaan[:limit]
+    return [normalize_record(r) for r in records]
+
+
+def parse_record_time(record: dict) -> datetime | None:
+    raw = record.get("waktu_pemeriksaan") or record.get("waktu")
+    if isinstance(raw, datetime):
+        return raw
+    if not raw or not isinstance(raw, str):
+        return None
+    text = raw.strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[:19], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def generate_unique_ticket_no(existing_records: list[dict]) -> str:
+    prefix = f"FQ-{datetime.now().strftime('%y%m%d')}-"
+    existing = {
+        str(r.get("nomor_tiket") or "")
+        for r in existing_records
+        if str(r.get("nomor_tiket") or "").startswith(prefix)
+    }
+    seq = len(existing) + 1
+    while f"{prefix}{seq:03d}" in existing:
+        seq += 1
+    return f"{prefix}{seq:03d}"
+
+
 # ==========================================================
 # 2. ROUTES HALAMAN WEB & AUTH
 # ==========================================================
@@ -430,32 +478,126 @@ def api_berat():
 # ==========================================================
 @app.route("/api/stats", methods=["GET"])
 def api_stats():
-    data_db = ambil_semua_riwayat()
-    records = data_db if data_db else riwayat_pemeriksaan
-    total = max(len(records), 1428)
+    records = get_all_records(limit=1000)
+    total = len(records)
+    total_truk = 0
+    total_bus = 0
+    total_mobil = 0
+    total_normal = 0
+    total_overweight = 0
+
+    density_truk = [0] * 24
+    density_bus = [0] * 24
+    density_lainnya = [0] * 24
+
+    sums = {
+        "truk": {"p": 0.0, "t": 0.0, "w": 0.0, "n": 0, "n_dim": 0},
+        "bus": {"p": 0.0, "t": 0.0, "w": 0.0, "n": 0, "n_dim": 0},
+        "mobil": {"p": 0.0, "t": 0.0, "w": 0.0, "n": 0, "n_dim": 0},
+    }
+
+    for r in records:
+        gol = str(r.get("golongan") or "").upper().strip()
+        jenis = str(r.get("jenis_kendaraan") or r.get("jenis") or "").lower().strip()
+        if gol == "C" or "truk" in jenis or "truck" in jenis:
+            cat = "truk"
+            total_truk += 1
+        elif gol == "B" or "bus" in jenis:
+            cat = "bus"
+            total_bus += 1
+        else:
+            cat = "mobil"
+            total_mobil += 1
+
+        if "over" in str(r.get("status") or "").lower():
+            total_overweight += 1
+        else:
+            total_normal += 1
+
+        try:
+            p_val = float(r.get("panjang_cm") or r.get("P") or 0.0)
+        except (ValueError, TypeError):
+            p_val = 0.0
+        try:
+            t_val = float(r.get("tinggi_cm") or r.get("T") or 0.0)
+        except (ValueError, TypeError):
+            t_val = 0.0
+        raw_w = r.get("berat_aktual_gram")
+        if raw_w is None:
+            raw_w = r.get("berat_gram", r.get("berat", 0.0))
+        try:
+            w_val = float(raw_w or 0.0)
+        except (ValueError, TypeError):
+            w_val = 0.0
+
+        sums[cat]["n"] += 1
+        sums[cat]["w"] += w_val
+        if p_val > 0 and t_val > 0:
+            sums[cat]["p"] += p_val
+            sums[cat]["t"] += t_val
+            sums[cat]["n_dim"] += 1
+
+        dt = parse_record_time(r)
+        if dt is not None:
+            hr = dt.hour
+            if cat == "truk":
+                density_truk[hr] += 1
+            elif cat == "bus":
+                density_bus[hr] += 1
+            else:
+                density_lainnya[hr] += 1
+
+    density_hourly = [
+        density_truk[h] + density_bus[h] + density_lainnya[h]
+        for h in range(24)
+    ]
+    density_2h = [
+        density_hourly[h] + density_hourly[h + 1]
+        for h in range(0, 24, 2)
+    ]
+
+    now_hour = datetime.now().hour
+    active_hours = max(1, now_hour + 1)
+    avg_throughput = round(total / active_hours, 1) if total > 0 else 0.0
+    current_hour_throughput = density_hourly[now_hour]
+
+    def calc_avg(bucket: dict) -> dict:
+        if bucket["n"] == 0:
+            return {"count": 0, "panjang_cm": None, "tinggi_cm": None, "berat_gram": None}
+        return {
+            "count": bucket["n"],
+            "panjang_cm": round(bucket["p"] / bucket["n_dim"], 2) if bucket["n_dim"] > 0 else None,
+            "tinggi_cm": round(bucket["t"] / bucket["n_dim"], 2) if bucket["n_dim"] > 0 else None,
+            "berat_gram": round(bucket["w"] / bucket["n"], 1),
+        }
+
     return jsonify({
         "total_kendaraan": total,
-        "total_truk": max(int(total * 0.45), 642),
-        "total_bus": max(int(total * 0.22), 318),
-        "total_mobil": max(int(total * 0.33), 468),
-        "density_truk": [2, 1, 0, 1, 3, 8, 22, 38, 45, 41, 39, 36, 30, 28, 32, 35, 38, 42, 37, 30, 21, 14, 8, 4],
-        "density_bus": [1, 0, 0, 0, 2, 4, 10, 18, 22, 19, 18, 16, 14, 12, 15, 16, 18, 20, 17, 14, 10, 6, 3, 1],
-        "density_lainnya": [1, 0, 1, 0, 1, 3, 8, 15, 19, 17, 16, 15, 12, 10, 13, 14, 16, 18, 15, 12, 8, 5, 2, 1],
+        "total_truk": total_truk,
+        "total_bus": total_bus,
+        "total_mobil": total_mobil,
+        "total_normal": total_normal,
+        "total_overweight": total_overweight,
+        "density_truk": density_truk,
+        "density_bus": density_bus,
+        "density_lainnya": density_lainnya,
+        "density_hourly": density_hourly,
+        "density_2h": density_2h,
+        "avg_throughput": avg_throughput,
+        "current_hour_throughput": current_hour_throughput,
+        "rata_rata": {
+            "truk": calc_avg(sums["truk"]),
+            "bus": calc_avg(sums["bus"]),
+            "mobil": calc_avg(sums["mobil"]),
+        },
+        "gerbang": state_iot["gerbang"],
+        "sensor_live": state_iot["waktu"] is not None,
     })
 
 
 @app.route("/api/aktivitas", methods=["GET"])
 def api_aktivitas():
-    data_db = ambil_semua_riwayat(limit=10)
-    if data_db:
-        return jsonify(data_db)
-    if riwayat_pemeriksaan:
-        return jsonify(riwayat_pemeriksaan[:10])
-    return jsonify([
-        {"nomor": "GAT-T2862", "jenis": "Truk", "P": 11.9, "T": 3.8, "berat": 95.0, "status": "Normal"},
-        {"nomor": "GAT-T2881", "jenis": "Bus", "P": 11.2, "T": 3.4, "berat": 80.0, "status": "Normal"},
-        {"nomor": "GAT-T2898", "jenis": "Mobil", "P": 3.8, "T": 1.5, "berat": 48.0, "status": "Normal"},
-    ])
+    return jsonify(get_all_records(limit=10))
 
 
 @app.route("/api/proses-kendaraan", methods=["POST"])
@@ -551,19 +693,36 @@ def api_tiket():
         hasil = validasi_berat(gol, berat)
 
         id_pemeriksaan = generate_id_pemeriksaan()
+        existing_records = get_all_records(limit=1000)
         nomor_tiket = (
             None
             if hasil["status"] == "Overweight"
-            else f"FQ-{datetime.now().strftime('%y%m%d')}-{str(len(riwayat_pemeriksaan) + 1).zfill(3)}"
+            else generate_unique_ticket_no(existing_records)
         )
         foto_url = save_capture_photo(id_pemeriksaan, data.get("foto") or data.get("foto_base64"))
+        waktu_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        petugas = str(session.get("user") or "Operator")
+        jenis_label = "Mobil" if gol == "A" else ("Bus" if gol == "B" else "Truk")
+
+        state_kendaraan.update({
+            "jenis": jenis_label.lower(),
+            "golongan": gol,
+            "P": panjang_cm,
+            "T": tinggi_cm,
+            "W": berat,
+            "berat_gram": berat,
+            "berat_kg": round(berat / 1000.0, 4),
+            "status": hasil["status"],
+        })
 
         rekam_data = {
             "id_pemeriksaan": id_pemeriksaan,
-            "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "waktu": waktu_now,
+            "waktu_pemeriksaan": waktu_now,
             "nomor_tiket": nomor_tiket,
             "nama_pengemudi": driver,
-            "jenis_kendaraan": "Mobil" if gol == "A" else ("Bus" if gol == "B" else "Truk"),
+            "nama_petugas": petugas,
+            "jenis_kendaraan": jenis_label,
             "golongan": gol,
             "panjang_cm": panjang_cm,
             "tinggi_cm": tinggi_cm,
@@ -588,6 +747,7 @@ def api_tiket():
         ticket_obj = {
             "nomor": nomor_tiket or f"OVW-{id_pemeriksaan[-6:]}",
             "pengemudi": driver,
+            "petugas": petugas,
             "golongan": f"GOL. {gol}",
             "berat": berat,
             "berat_gram": berat,
@@ -604,16 +764,44 @@ def api_tiket():
         }
         return jsonify({"status": "ok", "tiket": ticket_obj})
 
-    data_db = ambil_semua_riwayat()
-    records = data_db if data_db else riwayat_pemeriksaan
-    return jsonify({"status": "success", "data": [resolve_capture_url(r) for r in records]})
+    return jsonify({"status": "success", "data": get_all_records(limit=500)})
 
 
 @app.route("/api/riwayat", methods=["GET"])
 def api_riwayat():
-    data_db = ambil_semua_riwayat()
-    records = data_db if data_db else riwayat_pemeriksaan
-    return jsonify({"status": "success", "data": [resolve_capture_url(r) for r in records]})
+    return jsonify({"status": "success", "data": get_all_records(limit=500)})
+
+
+def is_cv_api_reachable(timeout: float = 0.15) -> bool:
+    base = app.config.get("CV_API_URL", os.environ.get("CV_API_URL", "http://127.0.0.1:8000"))
+    parsed = urlparse(base)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+@app.route("/api/system-status", methods=["GET"])
+def api_system_status():
+    """Ringkasan status sensor, gerbang, API PCV, dan notifikasi overweight untuk topbar."""
+    bermasalah = ambil_kendaraan_bermasalah(limit=5)
+    if not bermasalah:
+        bermasalah = [
+            normalize_record(item)
+            for item in riwayat_pemeriksaan
+            if str(item.get("status", "")).lower().startswith("over")
+        ][:5]
+    return jsonify({
+        "sensor_live": state_iot["waktu"] is not None,
+        "berat_gram": state_iot["berat"],
+        "gerbang": state_iot["gerbang"],
+        "cv_online": is_cv_api_reachable(),
+        "overweight_count": len(bermasalah),
+        "overweight_recent": bermasalah,
+    })
 
 
 @app.route("/api/kendaraan-bermasalah", methods=["GET"])
@@ -622,24 +810,177 @@ def api_kendaraan_bermasalah():
     bermasalah = ambil_kendaraan_bermasalah()
     if not bermasalah:
         bermasalah = [item for item in riwayat_pemeriksaan if item["status"] == "Overweight"]
+    normalized = [normalize_record(item) for item in bermasalah]
     return jsonify({
         "status": "success",
-        "total": len(bermasalah),
-        "data": bermasalah,
+        "total": len(normalized),
+        "data": normalized,
     })
 
 
 # ==========================================================
-# 5. API AI ASSISTANT (CHAT BEBAS & PILIH DATA BERMASALAH)
+# 5. API AI ASSISTANT (MULTI-TURN, AUDIT HARIAN, VISION & SOP)
 # ==========================================================
+def decode_image_data_url(photo_data_url: str | None) -> tuple[bytes | None, str | None]:
+    if not photo_data_url or not isinstance(photo_data_url, str):
+        return None, None
+    match = _DATA_URL_RE.match(photo_data_url.strip())
+    if not match:
+        return None, None
+    mime_ext, b64_payload = match.group(1).lower(), match.group(2)
+    mime_type = "image/jpeg" if mime_ext in ("jpeg", "jpg") else f"image/{mime_ext}"
+    try:
+        raw_bytes = base64.b64decode(b64_payload, validate=True)
+    except Exception:
+        return None, None
+    if not 0 < len(raw_bytes) <= MAX_CAPTURE_BYTES:
+        return None, None
+    return raw_bytes, mime_type
+
+
+def load_capture_image_bytes(foto_url: str | None) -> tuple[bytes | None, str | None]:
+    """Muat byte foto tangkapan kendaraan dari static/captures secara aman."""
+    if not foto_url or not isinstance(foto_url, str):
+        return None, None
+    prefix = "/static/captures/"
+    if not foto_url.startswith(prefix):
+        return None, None
+    filename = Path(foto_url[len(prefix):]).name
+    if not filename:
+        return None, None
+    try:
+        target = (CAPTURES_DIR / filename).resolve()
+        if target.parent != CAPTURES_DIR.resolve() or not target.is_file():
+            return None, None
+        raw = target.read_bytes()
+        if not 0 < len(raw) <= MAX_CAPTURE_BYTES:
+            return None, None
+        ext = target.suffix.lower()
+        mime = "image/png" if ext == ".png" else ("image/webp" if ext == ".webp" else "image/jpeg")
+        return raw, mime
+    except OSError:
+        return None, None
+
+
+def sanitize_chat_history(raw_history) -> list[dict]:
+    if not isinstance(raw_history, list):
+        return []
+    cleaned = []
+    for item in raw_history[-rag_service.MAX_HISTORY_MESSAGES:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").lower().strip()
+        if role not in ("user", "assistant"):
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        cleaned.append({"role": role, "content": content[:1500]})
+    return cleaned
+
+
+def build_operational_audit_summary() -> dict:
+    """Bangun ringkasan data operasional real-time (harian & total) untuk konteks audit LLM."""
+    records = get_all_records(limit=1000)
+    today_date = datetime.now().date()
+
+    def summarize_bucket(bucket_records: list[dict]) -> dict:
+        total = len(bucket_records)
+        normal = overweight = mobil = bus = truk = 0
+        total_berat = 0.0
+        heaviest_over = None
+        recent_over = []
+
+        for r in bucket_records:
+            gol = str(r.get("golongan") or "").upper().strip()
+            jenis = str(r.get("jenis_kendaraan") or r.get("jenis") or "").lower().strip()
+            if gol == "C" or "truk" in jenis or "truck" in jenis:
+                truk += 1
+            elif gol == "B" or "bus" in jenis:
+                bus += 1
+            else:
+                mobil += 1
+
+            berat = float(r.get("berat_aktual_gram") or r.get("berat_gram") or 0.0)
+            batas = float(r.get("batas_maksimum_gram") or BATAS_BERAT_GRAM.get(gol, 55.0))
+            total_berat += berat
+            is_over = "over" in str(r.get("status") or "").lower()
+            if is_over:
+                overweight += 1
+                kelebihan = float(r.get("kelebihan_berat_gram") or max(0.0, round(berat - batas, 2)))
+                pct = r.get("persentase_kelebihan") or f"{round((kelebihan / max(1.0, batas)) * 100, 1)}%"
+                over_brief = {
+                    "id_pemeriksaan": r.get("id_pemeriksaan"),
+                    "waktu": r.get("waktu"),
+                    "nama_pengemudi": r.get("nama_pengemudi", "Pengemudi"),
+                    "jenis_kendaraan": r.get("jenis_kendaraan", "Kendaraan"),
+                    "golongan": gol or "A",
+                    "berat_aktual_gram": berat,
+                    "batas_maksimum_gram": batas,
+                    "kelebihan_berat_gram": kelebihan,
+                    "persentase_kelebihan": pct,
+                }
+                if len(recent_over) < 5:
+                    recent_over.append(over_brief)
+                if heaviest_over is None or kelebihan > heaviest_over["kelebihan_berat_gram"]:
+                    heaviest_over = over_brief
+            else:
+                normal += 1
+
+        return {
+            "total": total,
+            "normal": normal,
+            "overweight": overweight,
+            "tingkat_kepatuhan_persen": round((normal / total) * 100, 1) if total > 0 else 100.0,
+            "mobil": mobil,
+            "bus": bus,
+            "truk": truk,
+            "rata_rata_berat_gram": round(total_berat / total, 1) if total > 0 else 0.0,
+            "pelanggaran_terberat": heaviest_over,
+            "daftar_overweight_terbaru": recent_over,
+        }
+
+    today_records = []
+    for r in records:
+        dt = parse_record_time(r)
+        if dt is not None and dt.date() == today_date:
+            today_records.append(r)
+
+    gol_live = state_kendaraan.get("golongan", "A")
+    berat_live = float(state_kendaraan.get("W", 0.0))
+    val_live = validasi_berat(gol_live, berat_live)
+
+    return {
+        "tanggal_hari_ini": today_date.strftime("%Y-%m-%d"),
+        "waktu_server": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ringkasan_hari_ini": summarize_bucket(today_records),
+        "ringkasan_keseluruhan": summarize_bucket(records),
+        "sensor_timbangan_aktif": {
+            "jenis_kendaraan": str(state_kendaraan.get("jenis", "mobil")).capitalize(),
+            "golongan": gol_live,
+            "berat_gram": berat_live,
+            "batas_gram": val_live["batas_berat_gram"],
+            "status": val_live["status"],
+            "gerbang": state_iot.get("gerbang", "tutup"),
+            "sensor_live": state_iot.get("waktu") is not None,
+        },
+    }
+
+
 @app.route("/api/ai/query", methods=["POST"])
 def api_ai_query():
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     id_pemeriksaan = (data.get("id_pemeriksaan") or data.get("ticket_id") or "").strip()
     custom_vehicle = data.get("vehicle_data")
+    chat_history = sanitize_chat_history(data.get("history"))
+    uploaded_image = data.get("image") or data.get("foto")
+    include_photo = data.get("include_photo", True)
 
     vehicle_data = None
+    image_bytes = None
+    image_mime = None
+    attached_image_url = None
 
     # 1. Jika petugas memilih salah satu catatan kendaraan/tiket bermasalah dari daftar
     if id_pemeriksaan:
@@ -654,11 +995,14 @@ def api_ai_query():
                 "status": "error",
                 "message": f"Data pemeriksaan '{id_pemeriksaan}' tidak ditemukan."
             }), 404
-        vehicle_data = found
+        vehicle_data = normalize_record(found)
         if not query:
-            query = "Analisis klasifikasi overweight kendaraan ini, saran pengurangan muatannya, dan langkah penanganannya."
+            query = (
+                "Analisis klasifikasi overweight kendaraan ini, verifikasi kesesuaian visual fotonya "
+                "(jika tersedia), saran pengurangan muatannya, dan langkah penanganannya."
+            )
 
-    # 2. Jika dikirim payload vehicle_data langsung (misalnya dari simulasi Postman atau tombol analisis aktif)
+    # 2. Jika dikirim payload vehicle_data langsung
     elif isinstance(custom_vehicle, dict) and custom_vehicle:
         jenis = str(custom_vehicle.get("jenis_kendaraan") or "mobil").lower().strip()
         golongan = normalize_golongan(custom_vehicle.get("golongan"), jenis)
@@ -685,32 +1029,71 @@ def api_ai_query():
             "status": hasil["status"],
             "status_tiket": hasil["status_tiket"],
             "status_gerbang": hasil["status_gerbang"],
+            "foto_url": custom_vehicle.get("foto_url"),
         }
         if not query:
             query = "Bagaimana klasifikasi pelanggaran, saran pengurangan muatan, dan penanganan kendaraan ini?"
 
-    # 3. Jika mode chat bebas (tanpa memilih tiket/kendaraan)
+    # 3. Muat lampiran foto (prioritas: foto diunggah di chat -> foto capture kendaraan)
+    if uploaded_image:
+        image_bytes, image_mime = decode_image_data_url(uploaded_image)
+        if image_bytes is None:
+            return jsonify({
+                "status": "error",
+                "message": "Format foto lampiran tidak valid. Gunakan gambar JPG, PNG, atau WebP (maks. 5 MB)."
+            }), 400
+        if not query:
+            query = "Lakukan audit visual pada foto kendaraan ini: identifikasi jenis/golongan kendaraan dan catatan pemeriksaan gerbang."
+    elif include_photo and vehicle_data and vehicle_data.get("foto_url"):
+        image_bytes, image_mime = load_capture_image_bytes(vehicle_data.get("foto_url"))
+        if image_bytes is not None:
+            attached_image_url = vehicle_data.get("foto_url")
+
+    # 4. Pastikan ada pertanyaan
     if not query:
         return jsonify({
             "status": "error",
-            "message": "Silakan tulis pertanyaan atau pilih data kendaraan bermasalah terlebih dahulu."
+            "message": "Silakan tulis pertanyaan, lampirkan foto, atau pilih data kendaraan bermasalah terlebih dahulu."
         }), 400
 
     try:
-        rag_result = rag_service.generate_answer(question=query, vehicle_data=vehicle_data)
-        mode_konsultasi = "analisis_kendaraan" if vehicle_data else "chat_umum"
-        title = (
-            f"Analisis Kendaraan {vehicle_data.get('id_pemeriksaan', '')}".strip()
-            if vehicle_data
-            else "Konsultasi Regulasi & SOP FERQUEUE"
+        operational_summary = build_operational_audit_summary()
+        rag_result = rag_service.generate_answer(
+            question=query,
+            vehicle_data=vehicle_data,
+            chat_history=chat_history,
+            operational_summary=operational_summary,
+            image_bytes=image_bytes,
+            image_mime=image_mime,
         )
+        used_vision = bool(rag_result.get("used_vision", False))
+        used_fallback = bool(rag_result.get("used_fallback", False))
+        retrieval_mode = rag_result.get("retrieval_mode", "hybrid")
+
+        if vehicle_data:
+            mode_konsultasi = "audit_visual_kendaraan" if used_vision else "analisis_kendaraan"
+            title = f"Analisis Kendaraan {vehicle_data.get('id_pemeriksaan', '')}".strip()
+        elif used_vision:
+            mode_konsultasi = "audit_visual_bebas"
+            title = "Audit Visual Kendaraan Multimodal"
+        elif rag_service._is_daily_audit_query(query):
+            mode_konsultasi = "audit_harian"
+            title = f"Ringkasan Audit Harian ({operational_summary['tanggal_hari_ini']})"
+        else:
+            mode_konsultasi = "chat_umum"
+            title = "Konsultasi Regulasi & SOP FERQUEUE"
+
         return jsonify({
             "status": "success",
             "mode": mode_konsultasi,
             "title": title,
             "vehicle": vehicle_data,
             "summary": rag_result["answer"],
-            "sources": rag_result["sources"],
+            "sources": rag_result.get("sources", []),
+            "used_vision": used_vision,
+            "used_fallback": used_fallback,
+            "retrieval_mode": retrieval_mode,
+            "image_url": attached_image_url,
         })
     except Exception as e:
         app.logger.exception("Error pada /api/ai/query")
@@ -718,6 +1101,70 @@ def api_ai_query():
             "status": "error",
             "message": f"Gagal memproses RAG/LLM: {str(e)}",
         }), 503
+
+
+# ==========================================================
+# 6. API MANAJEMEN SOP & RE-INDEX RAG
+# ==========================================================
+@app.route("/api/ai/knowledge", methods=["GET", "POST"])
+def api_ai_knowledge():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        filename = data.get("filename", "")
+        content = data.get("content", "")
+        try:
+            saved = rag_service.save_knowledge_file(filename, content)
+        except ValueError as err:
+            return jsonify({"status": "error", "message": str(err)}), 400
+        reindex_info = rag_service.reindex_knowledge()
+        return jsonify({
+            "status": "success",
+            "file": saved,
+            "reindex": reindex_info,
+            "rag_status": rag_service.get_knowledge_status(),
+        })
+
+    return jsonify({
+        "status": "success",
+        "files": rag_service.list_knowledge_files(),
+        "rag_status": rag_service.get_knowledge_status(),
+    })
+
+
+@app.route("/api/ai/knowledge/<path:filename>", methods=["GET", "DELETE"])
+def api_ai_knowledge_item(filename):
+    if request.method == "DELETE":
+        try:
+            deleted = rag_service.delete_knowledge_file(filename)
+        except ValueError as err:
+            return jsonify({"status": "error", "message": str(err)}), 400
+        except FileNotFoundError as err:
+            return jsonify({"status": "error", "message": str(err)}), 404
+        reindex_info = rag_service.reindex_knowledge()
+        return jsonify({
+            "status": "success",
+            "deleted": deleted,
+            "reindex": reindex_info,
+            "rag_status": rag_service.get_knowledge_status(),
+        })
+
+    try:
+        doc = rag_service.read_knowledge_file(filename)
+        return jsonify({"status": "success", "file": doc})
+    except ValueError as err:
+        return jsonify({"status": "error", "message": str(err)}), 400
+    except FileNotFoundError as err:
+        return jsonify({"status": "error", "message": str(err)}), 404
+
+
+@app.route("/api/ai/knowledge/reindex", methods=["POST"])
+def api_ai_knowledge_reindex():
+    reindex_info = rag_service.reindex_knowledge()
+    return jsonify({
+        "status": "success",
+        "reindex": reindex_info,
+        "rag_status": rag_service.get_knowledge_status(),
+    })
 
 
 if __name__ == "__main__":

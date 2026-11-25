@@ -552,3 +552,14 @@
   object-fit: contain;
   border-radius: 6px;
 }
+
+@media print {
+  .riwayat-toolbar,
+  .riwayat-filters-grid,
+  .riwayat-pagination-bar,
+  #btn-print-riwayat,
+  #btn-export,
+  .riwayat-photo-dialog {
+    display: none !important;
+  }
+}

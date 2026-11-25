@@ -11,11 +11,9 @@ cv_api = Blueprint("cv_api", __name__)
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 
-def forward(path, body=None, content_type=None, coin_region=None, camera_geometry=None):
+def forward(path, body=None, content_type=None, camera_geometry=None):
     base = current_app.config.get("CV_API_URL", os.environ.get("CV_API_URL", "http://127.0.0.1:8000"))
     headers = {"Content-Type": content_type} if content_type else {}
-    if coin_region is not None:
-        headers["X-Coin-Region"] = coin_region
     if camera_geometry is not None:
         headers["X-Camera-Geometry"] = camera_geometry
     upstream = Request(base.rstrip("/") + path, data=body, headers=headers)
@@ -50,6 +48,5 @@ def detect():
         "/detect",
         request.get_data(),
         request.mimetype,
-        request.headers.get("X-Coin-Region"),
         request.headers.get("X-Camera-Geometry"),
     )

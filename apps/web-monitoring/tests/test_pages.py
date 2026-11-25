@@ -76,14 +76,114 @@ class WebMonitoringPagesTests(unittest.TestCase):
         mock_reply = {
             'answer': 'Batas berat Golongan A adalah 55 gram sesuai SOP FERQUEUE.',
             'sources': ['aturan_berat.md'],
+            'used_vision': False,
+            'used_fallback': False,
+            'retrieval_mode': 'hybrid_vector_keyword',
         }
-        with patch('app.rag_service.generate_answer', return_value=mock_reply):
-            res = self.client.post('/api/ai/query', json={'query': 'Berapa batas berat Golongan A?'})
+        with patch('app.rag_service.generate_answer', return_value=mock_reply) as mock_gen:
+            res = self.client.post('/api/ai/query', json={
+                'query': 'Berapa batas berat Golongan A?',
+                'history': [
+                    {'role': 'user', 'content': 'Halo'},
+                    {'role': 'assistant', 'content': 'Halo petugas!'},
+                ],
+            })
         self.assertEqual(res.status_code, 200)
         data = res.get_json()
         self.assertEqual(data.get('status'), 'success')
         self.assertIn('55 gram', data.get('summary', ''))
         self.assertEqual(data.get('sources'), ['aturan_berat.md'])
+        kwargs = mock_gen.call_args.kwargs
+        self.assertEqual(len(kwargs['chat_history']), 2)
+        self.assertIn('ringkasan_hari_ini', kwargs['operational_summary'])
+
+    def test_api_ai_daily_audit_and_multimodal_vision(self):
+        fake_jpeg = base64.b64encode(b'\xff\xd8\xff\xe0vision-test-jpeg\xff\xd9').decode('ascii')
+        data_url = f'data:image/jpeg;base64,{fake_jpeg}'
+
+        with patch('app.simpan_pemeriksaan', return_value=False), \
+             patch('app.ambil_semua_riwayat', return_value=[]):
+            self.client.post('/api/tiket', json={
+                'pengemudi': 'Rizal',
+                'golongan': 'C',
+                'berat_gram': 130.0,
+                'panjang_cm': 12.0,
+                'tinggi_cm': 3.6,
+            })
+
+            # Uji ringkasan audit harian dengan fallback lokal (tanpa perlu koneksi Gemini)
+            with patch('rag_service._get_genai_client', side_effect=RuntimeError('offline-test')):
+                res_audit = self.client.post('/api/ai/query', json={
+                    'query': 'Buatkan ringkasan audit harian hari ini',
+                })
+            self.assertEqual(res_audit.status_code, 200)
+            audit_json = res_audit.get_json()
+            self.assertEqual(audit_json['mode'], 'audit_harian')
+            self.assertTrue(audit_json['used_fallback'])
+            self.assertIn('Ringkasan Audit Harian', audit_json['summary'])
+            self.assertIn('Overweight: 1', audit_json['summary'])
+
+            # Uji audit visual multimodal lewat lampiran foto di chat
+            mock_vision = {
+                'answer': 'Foto menunjukkan kendaraan jenis Truk (Golongan C).',
+                'sources': ['aturan_berat.md'],
+                'used_vision': True,
+                'used_fallback': False,
+                'retrieval_mode': 'keyword_local',
+            }
+            with patch('app.rag_service.generate_answer', return_value=mock_vision) as mock_gen:
+                res_vis = self.client.post('/api/ai/query', json={
+                    'query': 'Verifikasi golongan kendaraan pada foto ini',
+                    'image': data_url,
+                })
+            self.assertEqual(res_vis.status_code, 200)
+            vis_json = res_vis.get_json()
+            self.assertTrue(vis_json['used_vision'])
+            self.assertEqual(vis_json['mode'], 'audit_visual_bebas')
+            self.assertEqual(mock_gen.call_args.kwargs['image_mime'], 'image/jpeg')
+            self.assertTrue(len(mock_gen.call_args.kwargs['image_bytes']) > 0)
+
+    def test_api_ai_knowledge_crud_and_reindex(self):
+        test_filename = 'test_sop_sementara_unit.md'
+        try:
+            list_res = self.client.get('/api/ai/knowledge')
+            self.assertEqual(list_res.status_code, 200)
+            files = [f['filename'] for f in list_res.get_json()['files']]
+            self.assertIn('aturan_berat.md', files)
+            self.assertIn('tarif_dan_golongan.md', files)
+
+            with patch('rag_service.reindex_knowledge', return_value={
+                'indexed_files': len(files) + 1,
+                'indexed_chunks': 10,
+                'vector_ready': True,
+                'warning': None,
+            }):
+                create_res = self.client.post('/api/ai/knowledge', json={
+                    'filename': test_filename,
+                    'content': '# SOP Uji Sementara\nAturan uji manajemen SOP.',
+                })
+                self.assertEqual(create_res.status_code, 200)
+                self.assertEqual(create_res.get_json()['file']['filename'], test_filename)
+
+                read_res = self.client.get(f'/api/ai/knowledge/{test_filename}')
+                self.assertEqual(read_res.status_code, 200)
+                self.assertIn('SOP Uji Sementara', read_res.get_json()['file']['content'])
+
+                # Tolak path traversal
+                bad_res = self.client.post('/api/ai/knowledge', json={
+                    'filename': '../bahaya.py',
+                    'content': 'x',
+                })
+                self.assertEqual(bad_res.status_code, 400)
+
+                del_res = self.client.delete(f'/api/ai/knowledge/{test_filename}')
+                self.assertEqual(del_res.status_code, 200)
+                self.assertEqual(del_res.get_json()['deleted'], test_filename)
+        finally:
+            from rag_service import KNOWLEDGE_DIR
+            leftover = KNOWLEDGE_DIR / test_filename
+            if leftover.exists():
+                leftover.unlink()
 
     def test_iot_berat_and_gate_commands(self):
         buka = self.client.post('/api/buka')
@@ -170,20 +270,95 @@ class WebMonitoringPagesTests(unittest.TestCase):
             self.assertNotIn('user', sess)
 
     def test_api_stats(self):
-        res = self.client.get('/api/stats')
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertIn('total_kendaraan', data)
-        self.assertIn('total_truk', data)
-        self.assertIn('total_bus', data)
-        self.assertIn('total_mobil', data)
-        self.assertIn('density_truk', data)
+        with patch('app.ambil_semua_riwayat', return_value=[]):
+            res_empty = self.client.get('/api/stats')
+            self.assertEqual(res_empty.status_code, 200)
+            empty_data = res_empty.get_json()
+            self.assertEqual(empty_data['total_kendaraan'], 0)
+            self.assertEqual(empty_data['total_truk'], 0)
+            self.assertEqual(empty_data['total_bus'], 0)
+            self.assertEqual(empty_data['total_mobil'], 0)
+            self.assertEqual(len(empty_data['density_truk']), 24)
+            self.assertEqual(len(empty_data['density_2h']), 12)
+
+            with patch('app.simpan_pemeriksaan', return_value=False):
+                self.client.post('/api/tiket', json={
+                    'pengemudi': 'Andi',
+                    'golongan': 'A',
+                    'berat_gram': 40.0,
+                    'panjang_cm': 6.0,
+                    'tinggi_cm': 2.2,
+                })
+                self.client.post('/api/tiket', json={
+                    'pengemudi': 'Budi',
+                    'golongan': 'C',
+                    'berat_gram': 120.0,
+                    'panjang_cm': 11.0,
+                    'tinggi_cm': 3.5,
+                })
+
+            res = self.client.get('/api/stats')
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertEqual(data['total_kendaraan'], 2)
+            self.assertEqual(data['total_mobil'], 1)
+            self.assertEqual(data['total_truk'], 1)
+            self.assertEqual(data['total_bus'], 0)
+            self.assertEqual(data['total_normal'], 1)
+            self.assertEqual(data['total_overweight'], 1)
+            self.assertEqual(data['rata_rata']['mobil']['berat_gram'], 40.0)
+            self.assertEqual(data['rata_rata']['truk']['panjang_cm'], 11.0)
 
     def test_api_aktivitas(self):
-        res = self.client.get('/api/aktivitas')
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertIsInstance(data, list)
+        with patch('app.ambil_semua_riwayat', return_value=[]):
+            res = self.client.get('/api/aktivitas')
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertIsInstance(data, list)
+            self.assertEqual(len(data), 0)
+
+            with patch('app.simpan_pemeriksaan', return_value=False):
+                self.client.post('/api/tiket', json={
+                    'pengemudi': 'Citra',
+                    'golongan': 'B',
+                    'berat_gram': 75.0,
+                    'panjang_cm': 10.5,
+                    'tinggi_cm': 3.2,
+                })
+            res2 = self.client.get('/api/aktivitas')
+            rows = res2.get_json()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]['nama_pengemudi'], 'Citra')
+            self.assertEqual(rows[0]['jenis_kendaraan'], 'Bus')
+
+    def test_api_system_status(self):
+        with patch('app.is_cv_api_reachable', return_value=False), \
+             patch('app.ambil_kendaraan_bermasalah', return_value=[]):
+            res = self.client.get('/api/system-status')
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertIn('sensor_live', data)
+            self.assertIn('gerbang', data)
+            self.assertEqual(data['cv_online'], False)
+            self.assertEqual(data['overweight_count'], 0)
+
+    def test_bounding_box_has_no_percentage_and_enter_prints_then_exits(self):
+        with self.client.session_transaction() as sess:
+            sess['user'] = 'operator'
+        mon_page = self.client.get('/monitoring')
+        self.assertEqual(mon_page.status_code, 200)
+        self.assertNotIn(b'AI ACC:', mon_page.data)
+        self.assertNotIn(b'98.4%', mon_page.data)
+
+        with self.client.get('/static/js/live_detection.js') as live_js:
+            self.assertEqual(live_js.status_code, 200)
+            self.assertNotIn(b'confidence * 100', live_js.data)
+
+        with self.client.get('/static/js/monitoring.js') as mon_js:
+            self.assertEqual(mon_js.status_code, 200)
+            self.assertIn(b'printAndCloseTicketModal', mon_js.data)
+            self.assertIn(b'window.print()', mon_js.data)
+            self.assertIn(b'afterprint', mon_js.data)
 
     def test_static_assets_exist(self):
         assets = [
@@ -199,14 +374,13 @@ class WebMonitoringPagesTests(unittest.TestCase):
             '/static/js/monitoring.js',
             '/static/js/riwayat.js',
             '/static/js/ai_assistant.js',
-            '/static/js/tickets.js',
             '/static/js/live_detection.js',
             '/static/assets/camera-demo.svg',
             '/static/assets/favicon.svg',
         ]
         for asset in assets:
-            res = self.client.get(asset)
-            self.assertEqual(res.status_code, 200, f'Asset {asset} failed to load')
+            with self.client.get(asset) as res:
+                self.assertEqual(res.status_code, 200, f'Asset {asset} failed to load')
 
 
 if __name__ == '__main__':
