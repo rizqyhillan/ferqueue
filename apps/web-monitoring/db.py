@@ -31,6 +31,83 @@ DB_CONFIG = {
 _last_db_error_time = 0
 DB_RETRY_INTERVAL = 15
 _foto_column_checked = False
+_petugas_checked = False
+
+
+def _ensure_petugas_table(conn):
+    global _petugas_checked
+    if _petugas_checked:
+        return True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS petugas (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL UNIQUE,
+                    password VARCHAR(255) NOT NULL,
+                    nama_petugas VARCHAR(100) NOT NULL,
+                    terakhir_login DATETIME NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            cur.execute("SELECT COUNT(*) AS total FROM petugas")
+            row = cur.fetchone()
+            if not row or (row.get("total") if isinstance(row, dict) else row[0]) == 0:
+                cur.execute("""
+                    INSERT INTO petugas (username, password, nama_petugas)
+                    VALUES
+                        ('operator', 'operator123', 'Rian Setiawan'),
+                        ('petugas2', 'petugas123', 'Dedi Kurniawan'),
+                        ('admin',    'admin123',    'Administrator Gate')
+                """)
+
+            # Pastikan kolom nama_petugas ada di riwayat_pemeriksaan
+            cur.execute("SHOW COLUMNS FROM riwayat_pemeriksaan LIKE 'nama_petugas'")
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE riwayat_pemeriksaan "
+                    "ADD COLUMN nama_petugas VARCHAR(100) NOT NULL DEFAULT 'Operator' AFTER nama_pengemudi"
+                )
+        _petugas_checked = True
+        return True
+    except Exception as e:
+        print(f"[DB WARNING] Gagal memastikan tabel/kolom petugas: {e}")
+        return False
+
+
+def autentikasi_petugas(username: str, password: str) -> dict | None:
+    """Verifikasi login petugas dari tabel database MySQL."""
+    conn = get_db_connection()
+    if not conn:
+        # Fallback offline jika MySQL belum start: akun default tetap bisa login
+        if username == "operator" and password == "operator123":
+            return {"username": "operator", "nama_petugas": "Rian Setiawan"}
+        return None
+
+    try:
+        _ensure_petugas_table(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, username, password, nama_petugas, terakhir_login FROM petugas WHERE username = %s LIMIT 1",
+                (username,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            db_password = row["password"] if isinstance(row, dict) else row[2]
+            if password == db_password:
+                user_id = row["id"] if isinstance(row, dict) else row[0]
+                cur.execute("UPDATE petugas SET terakhir_login = NOW() WHERE id = %s", (user_id,))
+                user_data = _format_row(row)
+                user_data.pop("password", None)
+                return user_data
+            return None
+    except Exception as e:
+        print(f"[DB ERROR] Gagal autentikasi petugas: {e}")
+        return None
+    finally:
+        conn.close()
 
 
 def _ensure_foto_column(conn):
@@ -98,6 +175,7 @@ def simpan_pemeriksaan(data: dict) -> bool:
         "id_pemeriksaan": data.get("id_pemeriksaan"),
         "nomor_tiket": data.get("nomor_tiket") or None,
         "nama_pengemudi": data.get("nama_pengemudi") or data.get("pengemudi") or "Pengemudi",
+        "nama_petugas": data.get("nama_petugas") or data.get("petugas") or "Operator",
         "jenis_kendaraan": str(data.get("jenis_kendaraan") or data.get("jenis") or "Mobil").capitalize(),
         "golongan": str(data.get("golongan") or "A").upper(),
         "panjang_cm": float(data.get("panjang_cm") if data.get("panjang_cm") is not None else data.get("P", 0.0)),
@@ -129,25 +207,26 @@ def simpan_pemeriksaan(data: dict) -> bool:
         return False
 
     try:
+        _ensure_petugas_table(conn)
         has_foto_col = _ensure_foto_column(conn)
         with conn.cursor() as cur:
             if has_foto_col:
                 cur.execute("""
                     INSERT INTO riwayat_pemeriksaan (
-                        id_pemeriksaan, nomor_tiket, nama_pengemudi, jenis_kendaraan, golongan,
+                        id_pemeriksaan, nomor_tiket, nama_pengemudi, nama_petugas, jenis_kendaraan, golongan,
                         panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status, foto_url
                     ) VALUES (
-                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(jenis_kendaraan)s, %(golongan)s,
+                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(nama_petugas)s, %(jenis_kendaraan)s, %(golongan)s,
                         %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s, %(foto_url)s
                     )
                 """, riwayat)
             else:
                 cur.execute("""
                     INSERT INTO riwayat_pemeriksaan (
-                        id_pemeriksaan, nomor_tiket, nama_pengemudi, jenis_kendaraan, golongan,
+                        id_pemeriksaan, nomor_tiket, nama_pengemudi, nama_petugas, jenis_kendaraan, golongan,
                         panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status
                     ) VALUES (
-                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(jenis_kendaraan)s, %(golongan)s,
+                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(nama_petugas)s, %(jenis_kendaraan)s, %(golongan)s,
                         %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s
                     )
                 """, riwayat)

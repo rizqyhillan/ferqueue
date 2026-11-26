@@ -78,31 +78,13 @@
               <path d="M19 4v4"/>
               <path d="M17 6h4"/>
             </svg>
-            <span>Asisten LLM</span>
-            <span class="sidebar__nav-badge sidebar__nav-badge--purple">Audit LLM</span>
+            <span>Asisten Petugas</span>
+           
           </a>
         </li>
       </ul>
     </nav>
 
-    <!-- Bottom Operator Info Card -->
-    <div class="sidebar__user-card">
-      <div class="sidebar__user-card-top">
-        <span class="sidebar__user-live">LIVE API</span>
-        <span class="sidebar__user-gw">Port Gateway 02</span>
-      </div>
-      <div class="sidebar__user-name">{{ user or 'Operator Pos' }}</div>
-      <div class="sidebar__user-role">Pemeriksaan &amp; Penimbangan</div>
-      <div class="sidebar__user-meta">
-        <div class="sidebar__user-meta-left">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-            <circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
-          <span>WIB Sync</span>
-        </div>
-        <span id="sidebar-sync-clock" class="sidebar__user-meta-time">--:--:-- UTC+7</span>
-      </div>
-    </div>
 
   </aside>
 
@@ -112,16 +94,15 @@
       <div class="topbar__location">
         <span>Terminal Dermaga Merak</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 18 15 12 9 6"/></svg>
-        <span class="topbar__location-bold">Gate Kendaraan #03</span>
+        <span class="topbar__location-bold">Gate Kendaraan</span>
       </div>
-      <span class="topbar__pill-gate" id="topbar-gate-pill">Gerbang: Standby</span>
+ 
     </div>
 
-    <div class="topbar__right">
-      <div class="topbar__sensors">
-        <span class="topbar__sensor-pill is-standby" id="topbar-scale-pill">Timbangan: Standby</span>
-        <span class="topbar__sensor-pill is-standby" id="topbar-cv-pill">Kamera PCV: Cek...</span>
-      </div>
+      <div class="topbar__right">
+        <div class="topbar__sensors">
+         
+        </div>
 
       <!-- Notification button & dropdown -->
       <div class="topbar__dropdown-wrap">
@@ -165,12 +146,18 @@
         </div>
       </div>
 
-      <!-- Avatar / Logout -->
-      <a href="/logout" class="topbar__avatar" title="Keluar ({{ user or 'Operator' }})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-        </svg>
-      </a>
+      <!-- User info pill & Logout -->
+      <div style="display: flex; align-items: center; gap: 8px; margin-left: 6px; padding: 4px 10px; background: rgba(241, 245, 249, 0.9); border: 1px solid var(--clr-border, #E2E8F0); border-radius: 999px; font-size: 13px;">
+        <span style="display: inline-block; width: 7px; height: 7px; background: #10B981; border-radius: 50%;"></span>
+        <span style="font-weight: 600; color: #1E293B;">{{ user or 'Operator' }}</span>
+        <a href="/logout" class="topbar__avatar" title="Keluar / Ganti Petugas ({{ user or 'Operator' }})" style="margin-left: 2px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </a>
+      </div>
     </div>
   </header>
 
