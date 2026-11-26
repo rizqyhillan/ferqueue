@@ -11,7 +11,7 @@ from .settings import DEFAULT_CONFIG, load_config
 
 def main():
     parser = argparse.ArgumentParser(description='Training deteksi kendaraan dari anotasi YOLO atau COCO JSON.')
-    parser.add_argument('action', choices=['check', 'check-inference', 'fix-tf-slim', 'diagnose', 'serve', 'stage-yolo', 'adopt-coco', 'inspect', 'prepare', 'plan', 'preview', 'segment', 'build-records', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
+    parser.add_argument('action', choices=['check', 'check-inference', 'fix-tf-slim', 'diagnose', 'network', 'serve', 'stage-yolo', 'adopt-coco', 'inspect', 'prepare', 'plan', 'preview', 'segment', 'build-records', 'clean-dataset', 'train', 'evaluate', 'export', 'predict', 'test', 'package-model', 'import-model'])
     parser.add_argument('--config', default=os.environ.get('CV_CONFIG_PATH', DEFAULT_CONFIG))
     parser.add_argument('--input', default='data/inference')
     parser.add_argument('--output', help='Folder hasil; default berbeda untuk setiap tahapan.')
@@ -32,7 +32,7 @@ def main():
         if args.require_gpu:
             from .runtime import require_gpu
             require_gpu()
-        elif args.action in ('check', 'train'):
+        elif args.action in ('check', 'train', 'network'):
             from .runtime import use_cpu
             use_cpu()
         if args.action == 'test':
@@ -44,6 +44,9 @@ def main():
         elif args.action == 'diagnose':
             from .diagnostics import diagnose
             diagnose(config, root, args.output or 'outputs/model-diagnosis.json')
+        elif args.action == 'network':
+            from .network_summary import show_network
+            show_network(config, root, args.output or 'outputs/cnn-network')
         elif args.action == 'serve':
             from .live_api import serve
             serve(config, root, args.host, args.port, calibration_only=args.calibration_only)

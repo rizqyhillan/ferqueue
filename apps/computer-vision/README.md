@@ -36,6 +36,7 @@ apps/computer-vision/
 | `package-model`, `import-model` | Membagikan model dan preprocessing |
 | `fix-tf-slim`, `check`, `check-inference` | Kompatibilitas dan pemeriksaan environment |
 | `diagnose` | Memeriksa checkpoint dan model ekspor |
+| `network` | Menampilkan daftar lengkap layer network CNN, ringkasan parameter, dan diagram arsitektur |
 | `clean-dataset` | Audit/karantina dataset setelah review operator |
 | `test` | Menjalankan pengujian kode tanpa training dataset pengguna |
 
