@@ -15,24 +15,7 @@
 <div class="page-header-row">
   <div class="page-header-left">
     <h1 class="page-title">FERQUEUE AI Assistant &amp; Dispute Advisor</h1>
-    <p class="page-subtitle">Asisten cerdas berbasis Hybrid RAG, audit visual multimodal (foto kendaraan), ringkasan audit harian, dan manajemen dokumen SOP PM 103/2017.</p>
-  </div>
-  <div class="page-header-right">
-    <div class="badge-header">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-        <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
-      </svg>
-      <span>Engine: <strong>Hybrid RAG + Vision</strong></span>
-    </div>
-    <button type="button" class="btn btn--primary" id="btn-open-sop-manager">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
-      <span>Kelola SOP &amp; RAG</span>
-    </button>
+    
   </div>
 </div>
 
@@ -84,27 +67,6 @@
           <button type="button" class="ai-prompt-btn" data-query="Apa dasar hukum Permenhub PM 103 Tahun 2017 untuk menolak kendaraan overweight di gerbang?">
             <span>📜 Dasar Hukum Permenhub PM 103/2017 (Pasal 2, 4, 5, 6)</span>
           </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Card: Ringkasan Basis Pengetahuan SOP -->
-    <div class="card">
-      <div class="card__header">
-        <h2 class="card__title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-          </svg>
-          Basis Pengetahuan RAG
-        </h2>
-        <span class="ai-rag-pill" id="ai-rag-summary-badge">Memuat...</span>
-      </div>
-      <div class="card__body" style="padding: 12px 16px;">
-        <p class="ai-rag-desc" id="ai-rag-summary-text">Memeriksa dokumen SOP dan status indeks ChromaDB...</p>
-        <div class="ai-rag-actions">
-          <button type="button" class="btn btn--outline" id="btn-open-sop-manager-2" style="flex: 1; font-size: 11.5px; padding: 6px 10px;">Kelola Dokumen SOP</button>
-          <button type="button" class="btn btn--outline" id="btn-quick-reindex" style="font-size: 11.5px; padding: 6px 10px;">Re-index</button>
         </div>
       </div>
     </div>

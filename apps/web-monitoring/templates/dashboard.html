@@ -28,7 +28,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
       </svg>
-      <span>Shift Aktif <strong id="dash-op-shift">—</strong></span>
     </div>
   </div>
 </div>
@@ -167,156 +166,11 @@
   </div>
 </div>
 
-<!-- Bottom Grid 2 Columns -->
-<div class="dash-bottom-grid">
 
-  <!-- Left: Statistik Rata-rata Pengukuran -->
-  <div class="card">
-    <div class="card__header">
-      <div class="card__header-left">
-        <h2 class="card__title">
-          <span class="card__badge-num">01</span>
-          Statistik Rata-rata Pengukuran
-        </h2>
-        <p class="card__subtitle">Data rata-rata panjang, tinggi, &amp; berat per golongan dari hasil pemeriksaan</p>
-      </div>
-    </div>
-    <div class="card__body">
-      <div class="avg-category-list">
-        <!-- Truk -->
-        <div class="avg-category-item">
-          <div class="avg-category-top">
-            <span class="avg-category-name">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
-                <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
-              </svg>
-              Truk
-            </span>
-            <span class="avg-category-badge">Gol. C · Maks 100 g</span>
-          </div>
-          <div class="avg-category-boxes">
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Panjang</span>
-              <span class="avg-category-box-val" id="avg-truk-p">—</span>
-            </div>
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Tinggi</span>
-              <span class="avg-category-box-val" id="avg-truk-t">—</span>
-            </div>
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Berat</span>
-              <span class="avg-category-box-val" id="avg-truk-w">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bus -->
-        <div class="avg-category-item">
-          <div class="avg-category-top">
-            <span class="avg-category-name">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="6" width="20" height="12" rx="2"/><line x1="2" y1="11" x2="22" y2="11"/>
-                <circle cx="6" cy="19" r="1.5"/><circle cx="18" cy="19" r="1.5"/>
-              </svg>
-              Bus
-            </span>
-            <span class="avg-category-badge">Gol. B · Maks 85 g</span>
-          </div>
-          <div class="avg-category-boxes">
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Panjang</span>
-              <span class="avg-category-box-val" id="avg-bus-p">—</span>
-            </div>
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Tinggi</span>
-              <span class="avg-category-box-val" id="avg-bus-t">—</span>
-            </div>
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Berat</span>
-              <span class="avg-category-box-val" id="avg-bus-w">—</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Mobil -->
-        <div class="avg-category-item">
-          <div class="avg-category-top">
-            <span class="avg-category-name">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-2"/>
-                <circle cx="9" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
-              </svg>
-              Mobil
-            </span>
-            <span class="avg-category-badge">Gol. A · Maks 55 g</span>
-          </div>
-          <div class="avg-category-boxes">
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Panjang</span>
-              <span class="avg-category-box-val" id="avg-mobil-p">—</span>
-            </div>
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Tinggi</span>
-              <span class="avg-category-box-val" id="avg-mobil-t">—</span>
-            </div>
-            <div class="avg-category-box">
-              <span class="avg-category-box-lbl">Berat</span>
-              <span class="avg-category-box-val" id="avg-mobil-w">—</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Right: Aktivitas Lintasan Terbaru -->
-  <div class="card">
-    <div class="card__header">
-      <div class="card__header-left">
-        <h2 class="card__title">
-          <span class="card__badge-num">02</span>
-          Aktivitas Lintasan Terbaru
-        </h2>
-        <p class="card__subtitle">Log transaksi pemeriksaan sensor dimensi &amp; penimbangan terbaru</p>
-      </div>
-      <a href="/riwayat" class="dash-stat-card__bottom is-green" title="Lihat seluruh riwayat">
-        <span class="dash-stat-card__dot"></span>
-        Auto Refresh
-      </a>
-    </div>
-    <div class="card__body p-0">
-      <div class="activity-table-wrap">
-        <table class="activity-table">
-          <thead>
-            <tr>
-              <th>NO. TIKET / ID</th>
-              <th>KATEGORI</th>
-              <th>PANJANG</th>
-              <th>TINGGI</th>
-              <th>BERAT</th>
-              <th>WAKTU</th>
-              <th>STATUS</th>
-            </tr>
-          </thead>
-          <tbody id="activity-tbody">
-            <tr>
-              <td colspan="7" style="text-align: center; padding: 28px; color: #94A3B8;">Memuat aktivitas lintasan...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-</div>
 
 <!-- Footer Info -->
 <div class="page-footer-info">
   <span>Sistem Integrasi Penimbangan Pelabuhan PT ASDP Indonesia Ferry • FERQUEUE</span>
-  <button type="button" id="btn-download-shift-report" class="footer-action-link">
-    Unduh Rekap Laporan Shift (CSV)
-  </button>
 </div>
 {% endblock %}
 

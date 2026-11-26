@@ -28,6 +28,7 @@ from db import (
     ambil_detail_pemeriksaan,
     ambil_kendaraan_bermasalah,
     ambil_semua_riwayat,
+    autentikasi_petugas,
     simpan_pemeriksaan,
 )
 
@@ -290,10 +291,15 @@ def login_page():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         if username and password:
-            session["user"] = username
-            session.permanent = "remember" in request.form
-            return redirect(url_for("page_dashboard"))
-        error = "Username atau password tidak valid."
+            petugas = autentikasi_petugas(username, password)
+            if petugas:
+                session["user"] = petugas["nama_petugas"]
+                session["username"] = petugas["username"]
+                session.permanent = "remember" in request.form
+                return redirect(url_for("page_dashboard"))
+            error = "Username atau password salah."
+        else:
+            error = "Harap masukkan username dan password."
     return render_template("login.html", error=error)
 
 
@@ -638,6 +644,7 @@ def api_proses_kendaraan():
         "waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "nomor_tiket": nomor_tiket,
         "nama_pengemudi": pengemudi,
+        "nama_petugas": str(session.get("user") or "Operator"),
         "jenis_kendaraan": jenis.capitalize(),
         "golongan": golongan,
         "panjang_cm": panjang_cm,

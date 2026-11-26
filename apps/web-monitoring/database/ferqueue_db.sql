@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS riwayat_pemeriksaan (
     nomor_tiket VARCHAR(30) NULL UNIQUE COMMENT 'NULL jika Overweight',
     waktu_pemeriksaan DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     nama_pengemudi VARCHAR(100) NOT NULL DEFAULT 'Pengemudi',
+    nama_petugas VARCHAR(100) NOT NULL DEFAULT 'Operator',
     jenis_kendaraan VARCHAR(30) NOT NULL,
     golongan CHAR(1) NOT NULL,
     panjang_cm DECIMAL(6, 2) NOT NULL DEFAULT 0.00,
@@ -74,6 +75,27 @@ CREATE TABLE IF NOT EXISTS detail_overweight (
         FOREIGN KEY (id_pemeriksaan) REFERENCES riwayat_pemeriksaan(id_pemeriksaan)
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ==============================================================================
+-- 4. TABEL: petugas (Akun Login Petugas Operasional)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS petugas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    nama_petugas VARCHAR(100) NOT NULL,
+    terakhir_login DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Data Akun Petugas Default
+INSERT INTO petugas (username, password, nama_petugas)
+VALUES
+    ('operator', 'operator123', 'Rian Setiawan'),
+    ('petugas2', 'petugas123', 'Dedi Kurniawan'),
+    ('admin',    'admin123',    'Administrator Gate')
+ON DUPLICATE KEY UPDATE
+    nama_petugas = VALUES(nama_petugas);
 
 -- ==============================================================================
 -- SELESAI. Database FERQUEUE siap digunakan (3 tabel).

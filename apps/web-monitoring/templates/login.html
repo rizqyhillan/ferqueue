@@ -101,8 +101,8 @@
               id="password"
               name="password"
               class="login-input"
-              placeholder="••••••••••••"
-              value="••••••••••••"
+              placeholder="Masukkan password"
+              value="operator123"
               required
             />
             <button type="button" class="login-input-toggle" id="btn-toggle-pw" title="Lihat password">
@@ -111,6 +111,12 @@
               </svg>
             </button>
           </div>
+        </div>
+
+        <div style="margin-bottom: 16px; padding: 10px 12px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; font-size: 12px; color: #475569; line-height: 1.5; text-align: left;">
+          <div style="font-weight: 600; color: #1e40af; margin-bottom: 2px;">Akun Petugas Terdaftar:</div>
+          <div>• Username: <code>operator</code> | Password: <code>operator123</code></div>
+          <div>• Username: <code>petugas2</code> | Password: <code>petugas123</code></div>
         </div>
 
         <label class="login-checkbox-wrap">
@@ -164,7 +170,7 @@
     if (forgotBtn) {
       forgotBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        alert('Untuk reset password akun operasional, silakan hubungi administrator pelabuhan atau gunakan akun operator default.');
+        alert('Akun petugas operasional terdaftar di database MySQL. Anda dapat masuk dengan akun default: operator / operator123.');
       });
     }
   </script>
