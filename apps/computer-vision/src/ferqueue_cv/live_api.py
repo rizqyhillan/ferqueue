@@ -11,6 +11,7 @@ from time import perf_counter
 from PIL import Image, ImageOps
 
 from .postprocessing import select_detections
+from .processing import describe_preprocessing
 from .settings import DEFAULT_CONFIG, load_config
 from .side_measurement import (
     CAMERA_GEOMETRY_HEADER,
@@ -106,6 +107,7 @@ def serve(config, root, host='127.0.0.1', port=8000, *, calibration_only=False):
         detect(detector, Image.new('RGB', (640, 480)), metadata.get('preprocessing'))
         context.update(detector=detector, metadata=metadata, classes=frozen['manifest']['classes'])
         print(f'Model: {metadata["saved_model"]}', flush=True)
+        print(f'Preprocessing: {describe_preprocessing(metadata.get("preprocessing"))}', flush=True)
     with HTTPServer((host, port), Handler) as server:
         server.context = context
         print(f'API siap: http://{host}:{port}/health', flush=True)

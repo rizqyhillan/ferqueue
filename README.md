@@ -1,66 +1,52 @@
 # FERQUEUE
 
-PCV deteksi kendaraan dengan **TensorFlow 2.15.1 dan SSD MobileNet V2 FPNLite 320×320**, terhubung ke dashboard Flask untuk kamera dan unggah gambar.
+PCV deteksi kendaraan dengan **TensorFlow 2.15.1, preprocessing LAB-CLAHE halus, dan SSD MobileNet V2 FPNLite 320×320**, terhubung ke dashboard Flask untuk kamera live, unggah gambar, pengukuran dimensi trigonometri, validasi aturan anomali, dan AI Assistant LLM.
 
-Mulai dari **[panduan PCV manual](docs/PCV_MANUAL.md)**. Panduan mencakup instalasi software, dataset raw berlabel, konversi YOLO → COCO memakai [repo Taeyoung96](https://github.com/Taeyoung96/Yolo-to-COCO-format-converter), pembagian sesi train/test, segmentasi GrabCut untuk review, pengolahan citra, TFRecord, training, evaluasi, dan integrasi web. Setiap tahap dijalankan sendiri dengan perintah Python langsung; tidak memerlukan script Bash/PowerShell proyek.
+## Alur Utama PCV (LAB-CLAHE → SSD MobileNet V2 FPNLite)
 
-## Alur utama
-
-1. Pasang Python 3.11 dan environment `.venv-pcv`; ikuti pemasangan manual TensorFlow, sumber Object Detection API, serta protoc pada panduan.
-2. Salin gambar, label YOLO bbox, dan `classes.txt` asli ke `data/raw/vehicles/`. Gunakan subfolder sesi atau `groups.csv` agar frame satu rekaman tidak bocor antar-split.
-3. Jalankan tahap berikut satu per satu dari root repo dengan Python environment tersebut:
+1. Pasang Python 3.11 dan environment `.venv-pcv`, lalu pasang dependensi dari `apps/computer-vision/requirements/`.
+2. Siapkan gambar dan label berlabel manual (`Mobil`, `Truk`, `Bus`) di `data/raw/vehicles/`.
+3. Jalankan tahap pengolahan data di laptop lokal dari root repo:
 
 ```text
-python pcv.py inspect --config apps/computer-vision/configs/yolo.json
-python pcv.py stage-yolo --config apps/computer-vision/configs/yolo.json --output data/processed/pcv-converter-v2
-# Jalankan main.py repo Taeyoung96 untuk train dan test sesuai panduan bagian 5.
-python pcv.py adopt-coco --config apps/computer-vision/configs/yolo.json --staging data/processed/pcv-converter-v2 --input .cache/yolo-to-coco/output --output data/processed/pcv-coco-v2
-python pcv.py prepare --config apps/computer-vision/configs/coco.json
-python pcv.py segment --config apps/computer-vision/configs/coco.json --output outputs/pcv-segment-v1
-python pcv.py preview --config apps/computer-vision/configs/coco.json --output outputs/pcv-preview-v1
-python pcv.py plan --config apps/computer-vision/configs/coco.json
-python pcv.py build-records --config apps/computer-vision/configs/coco.json
-python pcv.py train --config apps/computer-vision/configs/coco.json
-python pcv.py export --config apps/computer-vision/configs/coco.json
-python pcv.py evaluate --config apps/computer-vision/configs/coco.json --split test
+.venv-pcv/bin/python pcv.py inspect --config apps/computer-vision/configs/coco-v4-clahe.json
+.venv-pcv/bin/python pcv.py preview --config apps/computer-vision/configs/coco-v4-clahe.json --limit 8 --output outputs/preview-v4-clahe
+.venv-pcv/bin/python pcv.py build-records --config apps/computer-vision/configs/coco-v4-clahe.json
 ```
 
-4. Periksa laporan test, prediksi gambar baru, lalu jalankan API PCV dan Flask sesuai bagian 11–12 pada panduan.
+`build-records` otomatis membekukan manifest bila belum ada, menerapkan preprocessing **LAB-CLAHE halus** (`clahe_clip_limit: 1.5`, `clahe_grid_size: 8` pada kanal luminansi `L`), serta menghasilkan `records/train.tfrecord`, `records/test.tfrecord`, `label_map.pbtxt`, `inputs.json`, dan `training-plan.json`.
 
-Contoh config baru memakai **70/30 berdasarkan kelompok**, batch 4, dan anggaran 30 epoch. Tidak ada split validasi. Training default memakai CPU; Radeon iGPU tidak dipakai oleh backend ini. NVIDIA Linux/WSL2 tetap opsional.
+4. Latih model di **Google Colab GPU** menggunakan `apps/computer-vision/notebooks/train_colab_v4_clahe.ipynb` (atau lokal dengan `pcv.py train`), lalu unduh arsip ZIP hasil ekspor (`pcv-model-colab-v4-clahe-ckpt-XX.zip`) ke `outputs/`.
+5. Impor model ke laptop lokal dan jalankan prediksi / API live kamera (default config `pcv.py` adalah `apps/computer-vision/configs/receiver-v4-clahe.json`):
 
-## Pengaturan dan batas hasil
+```text
+.venv-pcv/bin/python pcv.py import-model --archive outputs/pcv-model-colab-v4-clahe-ckpt-XX.zip
+.venv-pcv/bin/python pcv.py predict --input data/inference --output outputs/clahe-predictions
+.venv-pcv/bin/python pcv.py serve
+```
 
-Edit `apps/computer-vision/configs/coco.json` untuk epoch, batch, learning rate, augmentasi, preprocessing, serta threshold/NMS. [Tabel parameter dan pengaruhnya](docs/PCV_MANUAL.md#13-bagian-yang-bisa-diubah-dan-pengaruhnya) menjelaskan perubahan yang memerlukan training baru dan perubahan tampilan yang cukup dengan restart API. Eksperimen berbeda memakai `run_dir` berbeda.
-
-GrabCut menghasilkan **mask perkiraan untuk pemeriksaan**, bukan label segmentasi piksel untuk melatih SSD. Model mengenali kelas dan bounding box. Ukuran panjang, lebar, tinggi fisik memerlukan modul kalibrasi terpisah; bbox/mask belum menjadi ukuran meter.
-
-Web menerima kelas, confidence, dan bounding box melalui `/api/detect`. Integrasi kamera tidak memerlukan database atau ESP32. Model anomali, load cell, gate, dan penyimpanan pemeriksaan merupakan bagian lain yang perlu diverifikasi terpisah. [Panduan web](apps/web-monitoring/README-web.md).
+Preprocessing LAB-CLAHE otomatis dibaca dari metadata model hasil impor (`export.json`), sehingga transformasi saat training, evaluasi, `predict`, dan kamera live (`serve`) selalu identik.
 
 ## Struktur
 
 | Lokasi | Fungsi |
 | --- | --- |
-| `docs/PCV_MANUAL.md` | Panduan utama dari instalasi sampai web dan penanganan error |
-| `pcv.py` | Entry point manual memakai Python aktif |
-| `apps/computer-vision/configs/yolo.json` | Sumber YOLO dan pembagian kelompok |
-| `apps/computer-vision/configs/coco.json` | Sumber COCO dan parameter eksperimen baru |
-| `apps/computer-vision/requirements/` | Dependensi data, training CPU/CUDA, dan inference |
-| `apps/computer-vision/src/ferqueue_cv/` | Modul tiap tahap PCV |
-| `apps/web-monitoring/` | Flask, kamera/unggah, dan penghubung PCV |
-| `data/raw/vehicles/` | Gambar/label asli lokal |
-| `data/processed/` | COCO dan manifest versi dataset |
-| `models/mobilenet/runs/` | Records, checkpoint, ekspor, dan laporan per eksperimen |
-| `outputs/` | Review segmentasi, preview, dan prediksi |
-| `firmware/` | Firmware load cell/servo |
+| `pcv.py` | Entry point CLI seluruh tahap PCV (default: `receiver-v4-clahe.json`) |
+| `apps/computer-vision/configs/coco-v4-clahe.json` | Config persiapan data & training LAB-CLAHE (split konsisten `v4`) |
+| `apps/computer-vision/configs/receiver-v4-clahe.json` | Config default penerima model LAB-CLAHE untuk `import-model`, `predict`, & `serve` |
+| `apps/computer-vision/notebooks/train_colab_v4_clahe.ipynb` | Notebook training Colab GPU, evaluasi perbandingan `v4`, & visualisasi ekstraksi fitur CNN |
+| `apps/computer-vision/src/ferqueue_cv/` | Modul tiap tahap PCV (`processing.py`, `training.py`, `live_api.py`, `side_measurement.py`, dll.) |
+| `apps/web-monitoring/` | Flask dashboard, monitoring kamera, aturan anomali, & AI Assistant LLM ([panduan web](apps/web-monitoring/README-web.md)) |
+| `data/raw/vehicles/` | Gambar dan label asli lokal |
+| `data/processed/` | Anotasi COCO dan manifest dataset |
+| `models/mobilenet/runs/` | TFRecord, checkpoint, SavedModel ekspor, dan laporan per eksperimen |
+| `outputs/` | Preview, prediksi, paket ZIP model, dan diagram alur |
+| `firmware/` | Firmware ESP32 load cell HX711 & servo gate |
 
-Default `pcv.py` adalah `apps/computer-vision/configs/coco.json`. Untuk tahap sumber YOLO, pilih `--config apps/computer-vision/configs/yolo.json`. Konfigurasi, dependensi, kode, dan tes PCV berada di satu aplikasi; panduan lengkap ada di `docs/PCV_MANUAL.md`.
-
-Menjalankan API dan memeriksa model juga melalui entry point yang sama:
+Perintah utilitas tambahan:
 
 ```text
-python pcv.py serve
-python pcv.py diagnose
+.venv-pcv/bin/python pcv.py test
+.venv-pcv/bin/python pcv.py network
+.venv-pcv/bin/python pcv.py diagnose
 ```
-
-Catatan percobaan terdahulu disimpan di [catatan eksperimen PCV](docs/PCV_EXPERIMENTS.md). Pipeline tetap memakai train/test dan converter eksternal yang dipilih. Dataset, checkpoint, serta hasil model tersimpan pada folder data/model/output masing-masing.

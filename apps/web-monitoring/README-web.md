@@ -13,11 +13,11 @@ python3 -m venv .venv-web
 .venv-web/bin/python -m pip install -r apps/web-monitoring/requirements.txt
 ```
 
-Terminal pertama — PCV, memakai environment Python PCV yang sudah dipasang:
+Terminal pertama — PCV, memakai environment Python PCV yang sudah dipasang (default menggunakan `apps/computer-vision/configs/receiver-v4-clahe.json`):
 
 ```text
 source .venv-pcv/bin/activate
-python pcv.py serve --config apps/computer-vision/configs/coco.json
+python pcv.py serve
 ```
 
 Tunggu **API siap**. Terminal kedua — Flask:
@@ -49,7 +49,7 @@ py -3.11 -m venv .venv-web
 Di terminal lain, gunakan environment PCV/inference yang sudah dipasang:
 
 ```text
-.\.venv-pcv\Scripts\python.exe pcv.py serve --config apps/computer-vision/configs/coco.json
+.\.venv-pcv\Scripts\python.exe pcv.py serve
 ```
 
 Jika model diterima dari komputer lain, berikan config penerima yang sudah dipakai saat `import-model`.

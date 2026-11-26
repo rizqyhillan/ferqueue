@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .dataset import validate_ratios
 
-DEFAULT_CONFIG = 'apps/computer-vision/configs/receiver-v4.json'
+DEFAULT_CONFIG = 'apps/computer-vision/configs/receiver-v4-clahe.json'
 DISPLAY_KEYS = {'confidence_threshold', 'nms_iou_threshold', 'max_detections', 'class_agnostic_nms'}
 
 
@@ -36,13 +36,6 @@ def validate_processing(config):
     if grid > 64:
         raise ValueError('clahe_grid_size maksimal 64.')
     number(processing.get('gamma', 1), 'gamma', .1, 5)
-    segmentation = config.get('segmentation', {})
-    if not isinstance(segmentation, dict) or set(segmentation) - {'iterations', 'morphology_kernel'}:
-        raise ValueError('segmentation hanya menerima iterations dan morphology_kernel.')
-    if positive_int(segmentation, 'iterations', 5) > 50:
-        raise ValueError('iterations GrabCut maksimal 50.')
-    if type(segmentation.get('morphology_kernel', 3)) is not int or segmentation.get('morphology_kernel', 3) not in (0, 3, 5, 7):
-        raise ValueError('morphology_kernel harus 0, 3, 5, atau 7.')
 
 
 def load_config(path, root):

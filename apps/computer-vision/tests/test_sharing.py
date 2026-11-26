@@ -55,7 +55,12 @@ class SharingTests(unittest.TestCase):
     def test_preprocessing_survives_model_transfer(self):
         source = self.root / self.config['run_dir'] / 'export.json'
         metadata = json.loads(source.read_text())
-        metadata['preprocessing'] = {'gamma': .8, 'clahe_clip_limit': 2}
+        metadata['preprocessing'] = {
+            'denoise_kernel': 0,
+            'clahe_clip_limit': 1.5,
+            'clahe_grid_size': 8,
+            'gamma': 1.0,
+        }
         source.write_text(json.dumps(metadata))
         package_model(self.config, self.root, self.archive)
         receiver = {'run_dir': 'models/processed-receiver'}

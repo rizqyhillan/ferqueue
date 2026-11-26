@@ -10,8 +10,8 @@ import urllib.request
 
 from PIL import Image, ImageDraw, ImageOps
 
-from .dataset import IMAGE_EXTENSIONS, verify_images
-from .processing import preprocess_image
+from .dataset import IMAGE_EXTENSIONS, prepare, verify_images
+from .processing import describe_preprocessing, preprocess_image
 from .settings import training_identity, training_plan
 
 MODEL_NAME = 'ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8'
@@ -169,6 +169,10 @@ def make_pipeline(config, manifest, pretrained, run):
 
 
 def build_records(config, root):
+    manifest_path = root / config['prepared_dir'] / 'manifest.json'
+    if not manifest_path.is_file():
+        print(f'Manifest belum ada; menyiapkan otomatis di {config["prepared_dir"]}...', flush=True)
+        prepare(config, root)
     manifest = load_manifest(config, root)
     run = root / config['run_dir']
     # Store exact inputs so accidentally changed labels/settings cannot resume an old run.
@@ -191,8 +195,15 @@ def build_records(config, root):
     label_map = ''.join(f'item {{ id: {index} name: {json.dumps(name, ensure_ascii=False)} }}\n'
                         for index, name in enumerate(manifest['classes'], 1))
     (run / 'label_map.pbtxt').write_text(label_map, encoding='utf-8')
+    preprocessing = config.get('preprocessing') or {}
+    print(
+        f'Rencana training: {plan["train_images"]} gambar train, batch {plan["batch_size"]}, '
+        f'{plan["steps_per_epoch"]} steps/epoch, total {plan["num_steps"]} steps '
+        f'| preprocessing: {describe_preprocessing(preprocessing)}',
+        flush=True,
+    )
     if not all((run / 'records' / f'{split}.tfrecord').is_file() for split in manifest['splits']):
-        write_records(manifest, run / 'records', root, config.get('preprocessing'))
+        write_records(manifest, run / 'records', root, preprocessing)
     print(f'TFRecord dan label map siap: {run}; {plan["num_steps"]} langkah training.', flush=True)
     return manifest, run, plan
 
@@ -311,6 +322,11 @@ def predict(config, root, input_path, output_path):
         raise ValueError('Folder output harus berada di luar folder gambar input.')
     destination.mkdir(parents=True, exist_ok=True)
     classes = frozen['manifest']['classes']
+    preprocessing = metadata.get('preprocessing', {})
+    print(
+        f'Model: {metadata["saved_model"]} | Preprocessing: {describe_preprocessing(preprocessing)}',
+        flush=True,
+    )
     for path in paths:
         relative = Path(path.name) if source.is_file() else path.relative_to(source)
         # Keep original extension in output name, so a.jpg and a.png never collide.
@@ -318,7 +334,7 @@ def predict(config, root, input_path, output_path):
         target.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(path) as raw:
             image = ImageOps.exif_transpose(raw).convert('RGB')
-        result = detect(detector, image, metadata.get('preprocessing'))
+        result = detect(detector, image, preprocessing)
         width, height = image.size
         draw = ImageDraw.Draw(image)
         observations = []
@@ -339,6 +355,7 @@ def predict(config, root, input_path, output_path):
                                                 'status': 'not_calibrated'}})
         image.save(target, quality=95)
         payload = {'source_image': str(relative), 'image_width': width, 'image_height': height,
-                   'model': MODEL_NAME, 'checkpoint': metadata['checkpoint'], 'detections': observations}
+                   'model': MODEL_NAME, 'checkpoint': metadata['checkpoint'],
+                   'preprocessing': preprocessing, 'detections': observations}
         target.with_suffix('.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
         print(f'{relative}: {len(observations)} deteksi -> {target}', flush=True)
