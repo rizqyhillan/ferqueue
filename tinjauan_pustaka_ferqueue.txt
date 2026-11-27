@@ -1,0 +1,153 @@
+1.1 Konsep Dasar Sistem Cerdas
+==============================
+
+Sistem cerdas (intelligent system) adalah sistem berbasis komputasi yang mampu mengamati lingkungan di sekitarnya melalui sensor atau data masukan, memproses informasi tersebut menggunakan penalaran maupun pembelajaran mesin, lalu menghasilkan keputusan atau tindakan secara otonom untuk mencapai tujuan tertentu. Berbeda dari sistem konvensional yang hanya menjalankan instruksi statis tanpa kesadaran konteks, sistem cerdas menggabungkan persepsi, pemrosesan pengetahuan, dan aksi dalam satu siklus yang terintegrasi.
+
+Secara umum, karakteristik utama dari sebuah sistem cerdas meliputi:
+1. Persepsi (Sensing): Kemampuan menangkap data dari dunia nyata, baik berupa citra visual, sinyal sensor fisik, maupun input teks.
+2. Penalaran dan Pengambilan Keputusan (Reasoning & Decision Making): Kemampuan mengolah data mentah menjadi kesimpulan atau keputusan berdasarkan aturan logika maupun model terlatih.
+3. Pembelajaran dan Adaptasi (Learning & Adaptability): Kemampuan mengenali pola dari data pelatihan sehingga tetap andal menghadapi variasi kondisi baru (misalnya perbedaan pencahayaan atau bentuk kendaraan).
+4. Otonomi dan Aksi (Autonomy & Actuation): Kemampuan menjalankan respons nyata secara mandiri, seperti mengendalikan aktuator fisik, menerbitkan status layanan, atau menyajikan rekomendasi operasional.
+5. Interaktivitas: Kemampuan berkomunikasi secara efektif dengan pengguna manusia melalui antarmuka monitoring maupun bahasa alami.
+
+Dalam project FERQUEUE, konsep dasar sistem cerdas diterapkan secara utuh pada skenario pemeriksaan kendaraan sebelum masuk pelabuhan penyeberangan: persepsi dilakukan oleh kamera samping, sensor berat load cell HX711, dan sensor jarak ultrasonik; penalaran dijalankan melalui kombinasi Computer Vision, Rule-Based System, dan AI Assistant; sedangkan aksi diwujudkan lewat kendali motor servo palang gerbang otomatis, penerbitan/penolakan tiket manifest, serta pelaporan pada dashboard web.
+
+
+1.2 Kecerdasan Buatan (Artificial Intelligence)
+===============================================
+
+Kecerdasan Buatan (Artificial Intelligence / AI) adalah cabang ilmu komputer yang berfokus pada perancangan sistem agar mampu melaksanakan tugas-tugas yang secara tradisional memerlukan kecerdasan manusia, seperti pengenalan objek visual, pemahaman bahasa alami, penalaran logis, serta pengambilan keputusan.
+
+Dalam project FERQUEUE, kecerdasan buatan diterapkan pada tiga lapisan utama yang saling terintegrasi:
+1. Visi Komputer (Computer Vision): Digunakan untuk mendeteksi dan mengklasifikasikan jenis kendaraan secara otomatis dari tangkapan kamera (live stream maupun unggahan gambar) ke dalam tiga kelas utama, yaitu Mobil, Bus, dan Truk, sekaligus mengestimasi dimensi panjang dan tinggi kendaraan dari tampak samping.
+2. Penalaran Berbasis Aturan (Rule-Based Reasoning): Digunakan untuk mengevaluasi kepatuhan berat kendaraan hasil pengukuran sensor load cell terhadap batas maksimum tiap golongan secara objektif, menentukan kategori pelanggaran (Normal, Overweight Ringan, atau Overweight Berat), dan menetapkan keputusan penerbitan tiket serta arah buka gerbang.
+3. AI Generatif dan Pemrosesan Bahasa Alami (Large Language Model & RAG): Diwujudkan melalui fitur FERQUEUE AI Assistant yang memanfaatkan model bahasa besar (Gemini) yang diperkaya basis pengetahuan SOP (Retrieval-Augmented Generation). Asisten ini membantu petugas operasional menjawab pertanyaan regulasi, menyusun ringkasan audit harian dari data real-time, memberikan saran pengurangan muatan, hingga melakukan audit visual multimodal untuk memverifikasi kesesuaian foto kendaraan dengan golongan yang tercatat.
+
+
+1.3 Machine Learning
+====================
+
+Machine Learning (Pembelajaran Mesin) adalah subbidang kecerdasan buatan yang memungkinkan sistem mempelajari pola dan representasi fitur langsung dari data, tanpa harus memprogram aturan ekstraksi fitur secara manual untuk setiap kemungkinan kasus. Pada pendekatan Supervised Learning (pembelajaran terawasi), model dilatih menggunakan pasangan data masukan dan label kebenaran (ground truth) agar mampu memprediksi data baru secara akurat.
+
+Penerapan Machine Learning dalam project FERQUEUE berfokus pada dua aspek utama:
+1. Deteksi Objek Berbasis Deep Learning dan Transfer Learning:
+   FERQUEUE menggunakan pendekatan Supervised Object Detection berbasis Convolutional Neural Network (CNN) dengan arsitektur SSD MobileNet V2 FPNLite 320x320. Alih-alih melatih jaringan dari nol (from scratch) yang membutuhkan jutaan gambar, project ini menerapkan transfer learning dari bobot pretrained COCO kemudian melakukan fine-tuning menggunakan dataset lokal kendaraan (Mobil, Truk, Bus) yang telah dianotasi dan dikonversi ke format TFRecord. Performa model dievaluasi secara kuantitatif menggunakan metrik standar deteksi objek COCO (mean Average Precision / mAP dan Intersection over Union / IoU).
+2. Representasi Vektor (Embedding) untuk Pencarian Semantik:
+   Pada modul AI Assistant, dokumen SOP operasional diubah menjadi representasi vektor numerik menggunakan model embedding (gemini-embedding-001) dan disimpan dalam vector database (ChromaDB). Ketika petugas mengajukan pertanyaan, sistem menghitung kemiripan kosinus (cosine similarity) antara vektor pertanyaan dan potongan dokumen SOP untuk menemukan referensi yang paling relevan secara semantik.
+
+
+1.4 Sistem Berbasis Aturan (Rule-Based System)
+==============================================
+
+Sistem Berbasis Aturan (Rule-Based System) adalah pendekatan kecerdasan buatan simbolik yang merepresentasikan pengetahuan domain ke dalam kumpulan aturan logika kondisional berbentuk IF <kondisi> THEN <aksi/kesimpulan>. Sistem ini terdiri atas dua komponen inti, yaitu Basis Pengetahuan (Knowledge Base) yang menyimpan fakta dan aturan, serta Mesin Inferensi (Inference Engine) yang mencocokkan fakta aktual dengan aturan yang berlaku. Keunggulan utamanya adalah sifatnya yang deterministik, transparan, konsisten, dan mudah diaudit sesuai regulasi resmi.
+
+Pada project FERQUEUE, prinsip kerja Rule-Based System diterapkan secara tegas pada tiga fungsi operasional berikut:
+
+1. Validasi Berat Kendaraan dan Penerbitan Tiket (Backend Flask):
+   Mengacu pada Permenhub Nomor PM 103 Tahun 2017 (Pasal 2, 4, 5, dan 6), hasil klasifikasi kendaraan dipetakan ke golongan dan batas maksimum beratnya (skala prototipe diecast):
+   - Golongan A (Mobil) : batas maksimum 55 gram (tarif manifest Rp 60.000)
+   - Golongan B (Bus)   : batas maksimum 85 gram (tarif manifest Rp 120.000)
+   - Golongan C (Truk)  : batas maksimum 100 gram (tarif manifest Rp 250.000)
+
+   Aturan inferensi yang dijalankan:
+   - IF berat_aktual <= batas_golongan THEN status ditetapkan Normal, tiket masuk diterbitkan, dan gerbang dibuka menuju jalur masuk pelabuhan.
+   - IF berat_aktual > batas_golongan THEN status ditetapkan Overweight, tiket masuk ditolak / tidak diterbitkan (Pasal 5 PM 103/2017), gerbang dibuka khusus untuk jalur keluar / putar balik (Pasal 6 PM 103/2017), serta sistem menghitung minimal pengurangan muatan (kelebihan = berat_aktual - batas).
+   - Klasifikasi tingkat pelanggaran lanjutan: IF persentase_kelebihan <= 15% THEN Overweight Ringan, ELSE Overweight Berat. (Catatan: dimensi panjang dan tinggi hanya ditampilkan sebagai informasi monitoring dan tidak menentukan status pelanggaran berat).
+
+2. Kontrol Otomatisasi Palang Gerbang (Finite State Machine pada ESP32):
+   Firmware ESP32 menerapkan aturan transisi status gerbang (G_TUTUP -> G_MENUNGGU -> G_KENDARAAN -> G_BERSIH -> G_TUTUP) berdasarkan ambang jarak sensor ultrasonik (< 16 cm), waktu konfirmasi kendaraan (300 ms), jeda tutup setelah kendaraan lewat (1,5 detik), serta batas waktu pengaman (timeout 5 detik jika tidak ada kendaraan dan 15 detik batas maksimum kendaraan melintas).
+
+3. Mode Fallback Lokal pada AI Assistant:
+   Apabila koneksi ke layanan LLM eksternal tidak tersedia, sistem secara otomatis mengaktifkan penyusunan jawaban berbasis aturan lokal (rule-based fallback) yang tetap akurat mengacu pada data sensor aktual, riwayat pemeriksaan, dan aturan PM 103/2017.
+
+
+1.5 Metode atau Algoritma yang Digunakan
+========================================
+
+Project FERQUEUE mengombinasikan beberapa metode dan algoritma pada masing-masing subsistem:
+
+1. Preprocessing Citra LAB-CLAHE (Contrast Limited Adaptive Histogram Equalization):
+   Sebelum masuk ke tahap pelatihan maupun inferensi model deteksi, citra RGB dikonversi ke ruang warna CIELAB. Operasi CLAHE (clipLimit = 1.5, tileGridSize = 8x8) hanya diterapkan pada kanal luminansi L agar kontras lokal dan detail tepi kendaraan meningkat pada kondisi pencahayaan redup atau tidak merata, tanpa merusak komposisi warna (a, b) maupun geometri bounding box objek. Pipeline juga mendukung Gaussian Blur dan koreksi Gamma opsional, dengan transformasi identik antara tahap training, evaluasi, dan inferensi live.
+
+2. Deteksi Objek SSD MobileNet V2 FPNLite 320x320:
+   - MobileNetV2 bertindak sebagai backbone ekstraktor fitur yang efisien berkat arsitektur Inverted Residual dan Depthwise Separable Convolution, sehingga ringan dijalankan pada perangkat lokal.
+   - FPNLite (Feature Pyramid Network Lite) menggabungkan peta fitur lintas resolusi agar kendaraan berukuran kecil maupun besar tetap terdeteksi baik.
+   - SSD (Single Shot MultiBox Detector) memprediksi lokasi bounding box dan probabilitas kelas dalam satu kali forward pass sehingga mampu mendukung deteksi real-time.
+
+3. Post-Processing (Confidence Thresholding & Non-Maximum Suppression):
+   Keluaran mentah detektor disaring menggunakan ambang skor kepercayaan (confidence threshold) dan algoritma Non-Maximum Suppression (NMS) berbasis Intersection over Union (IoU) untuk mengeliminasi kotak deteksi yang saling tumpang tindih pada kendaraan yang sama.
+
+4. Estimasi Dimensi Kamera Samping (Geometri Kamera Pinhole):
+   Panjang dan tinggi kendaraan diestimasi dari bounding box kamera yang dipasang tegak lurus terhadap sisi kendaraan menggunakan model proyeksi kamera pinhole:
+     focal_px  = focal_norm * lebar_gambar_px
+     cm_per_px = distance_cm / focal_px
+     panjang_cm = lebar_bbox_px * cm_per_px
+     tinggi_cm  = tinggi_bbox_px * cm_per_px
+
+5. Penyaringan Sinyal Sensor IoT (Moving Average & Median Filter):
+   - Pembacaan berat dari load cell HX711 distabilkan menggunakan Moving Average atas 5 sampel terakhir beserta deadzone nol (< 0,3 gram).
+   - Pembacaan jarak dari sensor ultrasonik HC-SR04 disaring menggunakan Median Filter dari 5 pembacaan berurutan untuk meredam lonjakan noise sinyal pantulan.
+
+6. Hybrid Retrieval-Augmented Generation (Hybrid RAG):
+   Dokumen SOP dipecah menjadi potongan (chunking) sepanjang 350 kata dengan overlap 60 kata. Saat menerima kueri petugas, sistem menggabungkan pencarian vektor semantik (HNSW cosine similarity di ChromaDB dengan batas jarak maksimum 0,68) dan pencarian kata kunci lokal (keyword fallback) apabila hasil vektor terbatas, lalu menyuntikkan konteks SOP, data kendaraan, ringkasan operasional real-time, riwayat percakapan, serta lampiran gambar ke model gemini-2.5-flash (dengan temperature = 0.35 untuk menjaga konsistensi dan mencegah halusinasi).
+
+
+1.6 Teknologi dan Perangkat Pendukung
+=====================================
+
+Teknologi, perangkat lunak, bahasa pemrograman, dan perangkat keras yang digunakan dalam pengembangan FERQUEUE meliputi:
+
+1. Bahasa Pemrograman:
+   - Python 3.11 (pemrosesan Computer Vision, backend web, RAG AI Assistant)
+   - C/C++ Arduino (firmware mikrokontroler ESP32)
+   - JavaScript ES Modules, HTML5, CSS3 (antarmuka web monitoring interaktif)
+   - SQL (skema basis data relasional)
+
+2. Computer Vision & Deep Learning:
+   - TensorFlow 2.15.1, Keras 2.15.0, TensorFlow Object Detection API (tf-models-official)
+   - OpenCV (opencv-python 4.10.0.84), Pillow 10.4.0, NumPy 1.26.4
+   - PyCOCOTools 2.0.7, Matplotlib 3.8.4, Pandas 2.1.4, TensorBoard 2.15.2
+
+3. Eksperimen & Komparasi (Notebook):
+   - Google Colab GPU (pelatihan model berbasis GPU cloud)
+   - Scikit-Image (ekstraksi fitur HOG dan GLCM untuk eksperimen PCV klasik)
+   - Rembg & ONNX Runtime (segmentasi background ISNet)
+   - PyTorch & Torchvision (eksperimen perbandingan arsitektur deteksi)
+
+4. Web Framework, Frontend & Database:
+   - Flask 3.1.3 (web server, dashboard, dan REST API jembatan CV)
+   - PyMySQL & MySQL (penyimpanan riwayat pemeriksaan dan autentikasi petugas)
+   - Chart.js 4.4.0 (visualisasi grafik statistik di dashboard)
+
+5. AI Assistant & RAG:
+   - Google GenAI SDK (gemini-2.5-flash dan gemini-embedding-001)
+   - ChromaDB (vector database lokal untuk indeks dokumen SOP)
+   - python-dotenv (manajemen konfigurasi environment)
+
+6. Perangkat Keras IoT & Komunikasi:
+   - Mikrokontroler ESP32, Load Cell + Modul HX711, Sensor Ultrasonik HC-SR04, Motor Servo
+   - Protokol MQTT over WebSocket Secure (WSS port 443) menggunakan paho-mqtt (Python) serta library Arduino WebSockets, MQTTPubSubClient, ESP32Servo, dan HX711.
+
+
+1.7 Penelitian atau Project Terdahulu
+=====================================
+
+Pengembangan FERQUEUE bertumpu pada sejumlah penelitian dan fondasi teknologi terdahulu yang relevan pada bidang peningkatan citra, deteksi objek ringan, serta sistem informasi berbasis pengetahuan:
+
+1. Zuiderveld (1994) - Contrast Limited Adaptive Histogram Equalization (CLAHE):
+   Memperkenalkan metode perataan histogram adaptif lokal dengan pembatasan kontras (clip limit) untuk meningkatkan visibilitas detail citra tanpa memperkuat noise secara berlebihan. Dalam FERQUEUE, metode ini diadaptasi pada kanal luminansi L ruang warna CIELAB untuk menjaga konsistensi kualitas citra kendaraan di berbagai kondisi pencahayaan sebelum masuk ke model deteksi.
+
+2. Liu et al. (2016) - SSD: Single Shot MultiBox Detector:
+   Memperkenalkan paradigma deteksi objek satu tahap (one-stage detector) yang langsung memprediksi kotak pembatas dan kelas objek dari peta fitur multi-skala tanpa memerlukan tahap region proposal terpisah seperti pada keluarga R-CNN. Konsep ini menjadi dasar kecepatan inferensi real-time pada FERQUEUE.
+
+3. Lin et al. (2017) - Feature Pyramid Networks (FPN) for Object Detection:
+   Merancang arsitektur piramida fitur yang menggabungkan fitur semantik kuat dari lapisan dalam dengan resolusi spasial tinggi dari lapisan dangkal. Prinsip ini diadopsi melalui komponen FPNLite pada FERQUEUE untuk meningkatkan akurasi deteksi variasi ukuran kendaraan (Mobil, Bus, Truk).
+
+4. Sandler et al. (2018) - MobileNetV2: Inverted Residuals and Linear Bottlenecks:
+   Mengembangkan backbone CNN yang sangat hemat komputasi dan memori menggunakan depthwise separable convolution dan inverted residual blocks. Pada FERQUEUE, MobileNetV2 memungkinkan model hasil pelatihan di Google Colab tetap dapat dijalankan dengan lancar untuk inferensi lokal maupun kamera live tanpa memerlukan GPU berdaya tinggi.
+
+5. Lewis et al. (2020) - Retrieval-Augmented Generation (RAG) for Knowledge-Intensive NLP Tasks:
+   Memperkenalkan arsitektur yang memadukan model bahasa generatif dengan mekanisme pencarian dokumen eksternal agar keluaran jawaban lebih faktual, mutakhir, dan dapat ditelusuri sumbernya. FERQUEUE menerapkan dan mengembangkan konsep ini menjadi Hybrid RAG Multimodal (ChromaDB + keyword fallback + Gemini) yang terikat langsung pada regulasi Permenhub No. PM 103 Tahun 2017 dan data operasional real-time.
+
+Keterkaitan dan Posisi Pengembangan FERQUEUE:
+Jika sebagian besar penelitian terdahulu berfokus pada satu komponen secara terpisah -- seperti deteksi kendaraan di jalan raya, prototipe timbangan digital IoT, atau chatbot SOP berbasis teks -- project FERQUEUE mengintegrasikan keempat pilar tersebut dalam satu alur kerja end-to-end: (1) peningkatan citra LAB-CLAHE dan deteksi SSD MobileNet V2 FPNLite plus estimasi dimensi pinhole, (2) jembatan timbang dan palang gerbang otomatis ESP32 via MQTT-WSS, (3) validasi keputusan rule-based sesuai Permenhub PM 103 Tahun 2017, serta (4) AI Assistant RAG multimodal untuk mendukung keputusan petugas operasional di lapangan.
