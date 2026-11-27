@@ -128,48 +128,6 @@
   </div>
 
 </div>
-
-<!-- Dialog Manajemen SOP & RAG -->
-<dialog id="sop-manager-dialog" class="sop-dialog" aria-labelledby="sop-dialog-title">
-  <div class="sop-dialog__header">
-    <div>
-      <h2 id="sop-dialog-title" class="sop-dialog__title">Manajemen Dokumen SOP &amp; Indeks RAG</h2>
-      <p class="sop-dialog__sub" id="sop-dialog-status">Memuat daftar dokumen...</p>
-    </div>
-    <button type="button" class="sop-dialog__close" id="btn-close-sop-dialog" aria-label="Tutup dialog">&times;</button>
-  </div>
-
-  <div class="sop-dialog__body">
-    <!-- Sidebar daftar dokumen SOP -->
-    <div class="sop-list-pane">
-      <div class="sop-list-actions">
-        <button type="button" class="btn btn--primary" id="btn-sop-new" style="flex:1; font-size:12px; padding:6px 10px;">+ SOP Baru</button>
-        <button type="button" class="btn btn--outline" id="btn-sop-upload" style="font-size:12px; padding:6px 10px;">Unggah .md/.txt</button>
-        <input type="file" id="sop-file-upload" accept=".md,.txt,text/markdown,text/plain" style="display:none;" />
-      </div>
-      <div class="sop-files-list" id="sop-files-list"></div>
-    </div>
-
-    <!-- Editor dokumen SOP -->
-    <form class="sop-editor-pane" id="sop-editor-form">
-      <div class="sop-field">
-        <label for="sop-filename-input">Nama File SOP (.md atau .txt)</label>
-        <input type="text" id="sop-filename-input" placeholder="contoh: sop_pemeriksaan_khusus.md" required />
-      </div>
-      <div class="sop-field sop-field--grow">
-        <label for="sop-content-input">Isi Dokumen SOP (Markdown)</label>
-        <textarea id="sop-content-input" placeholder="# Judul SOP&#10;&#10;Tulis prosedur, aturan, atau panduan operasional di sini..." required></textarea>
-      </div>
-      <div class="sop-editor-footer">
-        <button type="button" class="btn btn--outline sop-btn-danger" id="btn-sop-delete">Hapus SOP</button>
-        <div style="display:flex; gap:8px;">
-          <button type="button" class="btn btn--outline" id="btn-sop-reindex">Re-index RAG</button>
-          <button type="submit" class="btn btn--primary" id="btn-sop-save">Simpan &amp; Re-index</button>
-        </div>
-      </div>
-    </form>
-  </div>
-</dialog>
 {% endblock %}
 
 {% block extra_js %}

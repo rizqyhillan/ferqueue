@@ -1,18 +1,41 @@
+/*
+  
+  Timbangan + Ultrasonik + Servo gerbang -> MQTT (WebSocket Secure, port 443)
+
+  Library yang harus diinstal (Library Manager):
+    1. WebSockets        (Markus Sattler)
+    2. MQTTPubSubClient  (hideakitai)
+    3. ESP32Servo
+    4. HX711             (Bogdan Necula)
+
+  Topik (unik pakai NIM):
+    publish   : <NIM>/data       -> JSON {"berat":..,"jarak":..,"servo":..,"gerbang":".."}
+    subscribe : <NIM>/perintah   -> "buka" | "tare" | "servo90" | "servo0"
+*/
+
 #include <Arduino.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
+#include <WebSocketsClient.h>
+#include <MQTTPubSubClient.h>
 #include <ESP32Servo.h>
 #include "HX711.h"
 
 // ================= KONFIGURASI (EDIT BAGIAN INI) =================
-const char* WIFI_SSID  = "11S";
-const char* WIFI_PASS  = "info12345";
-const char* SERVER_URL = "http://192.168.1.9:5000/api/berat";  // IP laptop yang menjalankan Flask
+const char* WIFI_SSID = "11S";
+const char* WIFI_PASS = "info12345";
+
+const char*    MQTT_HOST = "mqtt.walker880.my.id";
+const uint16_t MQTT_PORT = 443;
+const char*    MQTT_PATH = "/mqtt";
+const char*    MQTT_USER = "";          // isi kalau broker butuh username
+const char*    MQTT_PASS = "";          // isi kalau broker butuh password
+
+const String NIM = "E41240977";          // GANTI dengan NIM kamu, dipakai di nama topik
 
 const float         AMBANG_KENDARAAN_CM = 16;     // jarak di bawah ini = ada kendaraan
 const unsigned long KONFIRMASI_MS       = 300;    // kendaraan harus terdeteksi stabil selama ini
-const unsigned long TUNDA_TUTUP_MS      = 1000;   // setelah kendaraan lewat, 3 detik lalu servo menutup
-const unsigned long TUNGGU_MAKS_MS      = 5000;   // tidak ada kendaraan sama sekali -> tutup sendiri setelah 5 detik
+const unsigned long TUNDA_TUTUP_MS      = 1500;   // setelah kendaraan lewat, 1,5 detik lalu servo menutup
+const unsigned long TUNGGU_MAKS_MS      = 5000;   // tidak ada kendaraan sama sekali -> tutup sendiri
 const unsigned long KENDARAAN_MAKS_MS   = 15000;  // "kendaraan" terdeteksi terus selama ini -> tutup paksa
 // =================================================================
 
@@ -20,9 +43,8 @@ const unsigned long KENDARAAN_MAKS_MS   = 15000;  // "kendaraan" terdeteksi teru
 const int LOADCELL_DOUT_PIN = 16;
 const int LOADCELL_SCK_PIN  = 4;
 const int SERVO_PIN         = 18;
-const int BUTTON_PIN        = 19;  // tombol antara GPIO19 dan GND
 const int TRIG_PIN          = 23;
-const int ECHO_PIN          = 22;  // lewat pembagi tegangan (1k atas + 2k bawah)
+const int ECHO_PIN          = 22;  // lewat pembagi tegangan
 
 // ---------- Kalibrasi ----------
 const float CALIBRATION_FACTOR = 1026.33179;
@@ -30,12 +52,19 @@ const float CALIBRATION_FACTOR = 1026.33179;
 // ---------- Objek ----------
 HX711 scale;
 Servo myServo;
+WebSocketsClient ws;
+MQTTPubSubClient mqtt;
 
-// ---------- Servo & tombol ----------
+// ---------- MQTT ----------
+String TOPIC_DATA;
+String TOPIC_PERINTAH;
+String CLIENT_ID;
+String perintahMasuk = "";           // diisi callback, diproses di loop
+unsigned long lastMqttTry = 0;
+const unsigned long MQTT_RETRY_MS = 5000;
+
+// ---------- Servo ----------
 bool servoDi90 = false;
-bool lastButtonState = HIGH;
-unsigned long lastButtonTime = 0;
-const unsigned long DEBOUNCE_MS = 50;
 
 // ---------- Status gerbang ----------
 enum Gerbang { G_TUTUP, G_MENUNGGU, G_KENDARAAN, G_BERSIH };
@@ -54,10 +83,10 @@ float beratTerakhir = 0.0;
 
 // ---------- Ultrasonic (median 5 bacaan) ----------
 const int N_JARAK = 5;
-const float JARAK_KOSONG = 400.0;   // nilai untuk "tidak ada pantulan"
+const float JARAK_KOSONG = 400.0;
 float bufJarak[N_JARAK] = {400, 400, 400, 400, 400};
 int idxJarak = 0;
-float jarakCm = -1;                 // hasil median; -1 = kosong/tidak ada pantulan
+float jarakCm = -1;
 unsigned long lastJarak = 0;
 const unsigned long JARAK_INTERVAL_MS = 60;
 
@@ -74,15 +103,6 @@ void setupWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);
   delay(100);
-
-  Serial.println("Scan WiFi...");
-  int n = WiFi.scanNetworks();
-  bool ketemu = false;
-  for (int i = 0; i < n; i++) {
-    Serial.printf("  %s (sinyal %d dBm)\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
-    if (WiFi.SSID(i) == WIFI_SSID) ketemu = true;
-  }
-  if (!ketemu) Serial.println(">> SSID TIDAK TERLIHAT. Kemungkinan 5GHz / nama salah / terlalu jauh.");
 
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -102,12 +122,48 @@ void setupWiFi() {
   }
 }
 
+// ---------- MQTT ----------
+void setupMQTT() {
+  TOPIC_DATA     = NIM + "/data";
+  TOPIC_PERINTAH = NIM + "/perintah";
+  CLIENT_ID      = "esp32-" + NIM;
+
+  //WebSocket Secure ke wss://MQTT_HOST:443/mqtt dengan subprotocol "mqtt"
+  ws.beginSSL(MQTT_HOST, MQTT_PORT, MQTT_PATH, "", "mqtt");
+  ws.setReconnectInterval(3000);
+  mqtt.begin(ws);
+
+  Serial.println("Topik data     : " + TOPIC_DATA);
+  Serial.println("Topik perintah : " + TOPIC_PERINTAH);
+}
+
+void hubungkanMQTT() {
+  if (mqtt.isConnected()) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (!ws.isConnected()) return;                       // tunggu WebSocket siap dulu
+  if (millis() - lastMqttTry < MQTT_RETRY_MS) return;
+  lastMqttTry = millis();
+
+  Serial.println("Menghubungkan MQTT...");
+  bool ok;
+  if (strlen(MQTT_USER) > 0) ok = mqtt.connect(CLIENT_ID, MQTT_USER, MQTT_PASS);
+  else                       ok = mqtt.connect(CLIENT_ID);
+
+  if (ok) {
+    Serial.println("MQTT terhubung.");
+    mqtt.subscribe(TOPIC_PERINTAH, [](const String& payload, const size_t size) {
+      perintahMasuk = payload;
+    });
+  } else {
+    Serial.println("MQTT gagal, dicoba lagi nanti.");
+  }
+}
+
 // ---------- Setup ----------
 void setup() {
   Serial.begin(115200);
   setCpuFrequencyMhz(160);
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   digitalWrite(TRIG_PIN, LOW);
@@ -123,6 +179,7 @@ void setup() {
   scale.set_scale(CALIBRATION_FACTOR);
 
   setupWiFi();
+  setupMQTT();
 
   Serial.println("Kosongkan load cell... tare dalam 5 detik.");
   delay(5000);
@@ -182,7 +239,7 @@ void cekGerbang() {
 
     case G_BERSIH:
       if (ada) {
-        gerbang = G_KENDARAAN;   // kendaraan muncul lagi, batalkan penutupan
+        gerbang = G_KENDARAAN;
         waktuKendaraan = millis();
       } else if (millis() - waktuBersih >= TUNDA_TUTUP_MS) {
         tutupGerbang("kendaraan sudah lewat");
@@ -194,21 +251,36 @@ void cekGerbang() {
   }
 }
 
-// ---------- Tombol fisik ----------
-void bacaTombol() {
-  bool buttonState = digitalRead(BUTTON_PIN);
+// ---------- Perintah dari web (lewat MQTT) ----------
+void prosesPerintah() {
+  if (perintahMasuk.length() == 0) return;
+  String perintah = perintahMasuk;
+  perintahMasuk = "";
+  perintah.trim();
 
-  if (lastButtonState == HIGH && buttonState == LOW &&
-      millis() - lastButtonTime > DEBOUNCE_MS) {
-    lastButtonTime = millis();
-    if (!servoDi90) {
-      bukaGerbang();               // buka + masuk mode otomatis
-    } else {
-      tutupGerbang("manual");      // tekan lagi = tutup paksa
-    }
+  if (perintah == "buka") {
+    Serial.println("Perintah web: BUKA");
+    bukaGerbang();
+  } else if (perintah == "servo90") {
+    gerbang = G_TUTUP;
+    servoDi90 = true;
+    myServo.write(90);
+    Serial.println("Perintah web: servo 90 (manual)");
+  } else if (perintah == "servo0") {
+    gerbang = G_TUTUP;
+    servoDi90 = false;
+    myServo.write(0);
+    Serial.println("Perintah web: servo 0");
+  } else if (perintah == "tare") {
+    Serial.println("Perintah web: tare...");
+    scale.tare(20);
+    sampleCount = 0;
+    sampleIdx = 0;
+    beratTerakhir = 0.0;
+    Serial.println("Tare selesai.");
+  } else {
+    Serial.println("Perintah tidak dikenal: " +perintah);
   }
-
-  lastButtonState = buttonState;
 }
 
 // ---------- Timbangan ----------
@@ -248,9 +320,9 @@ void bacaJarak() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  long durasi = pulseIn(ECHO_PIN, HIGH, 25000);   // timeout 25 ms (~4 m)
+  long durasi = pulseIn(ECHO_PIN, HIGH, 25000);
   float cm = (durasi == 0) ? JARAK_KOSONG : durasi * 0.0343 / 2.0;
-  if (cm < 2.0 || cm > JARAK_KOSONG) cm = JARAK_KOSONG;   // di luar jangkauan = kosong
+  if (cm < 2.0 || cm > JARAK_KOSONG) cm = JARAK_KOSONG;
 
   bufJarak[idxJarak] = cm;
   idxJarak = (idxJarak + 1) % N_JARAK;
@@ -259,75 +331,48 @@ void bacaJarak() {
   jarakCm = (med >= JARAK_KOSONG) ? -1 : med;
 }
 
-// ---------- Kirim ke Flask & terima perintah ----------
-void kirimKeServer() {
-  if (WiFi.status() != WL_CONNECTED) {
-    if (millis() - lastReconnect >= RECONNECT_INTERVAL_MS) {
-      lastReconnect = millis();
-      Serial.println("WiFi putus, mencoba konek ulang...");
-      WiFi.disconnect();
-      WiFi.begin(WIFI_SSID, WIFI_PASS);
-    }
-    return;
-  }
-
-  HTTPClient http;
-  http.begin(SERVER_URL);
-  http.setTimeout(2000);
-  http.addHeader("Content-Type", "application/json");
+// ---------- Kirim data lewat MQTT ----------
+void kirimData() {
+  if (!mqtt.isConnected()) return;
 
   const char* namaGerbang[] = {"tutup", "menunggu", "kendaraan", "bersih"};
   String body = "{\"berat\":" + String(beratTerakhir, 1) +
                 ",\"jarak\":" + String(jarakCm, 1) +
                 ",\"servo\":" + (servoDi90 ? "90" : "0") +
                 ",\"gerbang\":\"" + namaGerbang[gerbang] + "\"}";
-  int code = http.POST(body);
+  mqtt.publish(TOPIC_DATA, body);
+}
 
-  if (code == 200) {
-    String perintah = http.getString();
-    perintah.trim();
-
-    if (perintah == "buka") {
-      Serial.println("Perintah web: BUKA");
-      bukaGerbang();
-    } else if (perintah == "servo90") {
-      gerbang = G_TUTUP;
-      servoDi90 = true;
-      myServo.write(90);
-      Serial.println("Perintah web: servo 90 (manual)");
-    } else if (perintah == "servo0") {
-      gerbang = G_TUTUP;
-      servoDi90 = false;
-      myServo.write(0);
-      Serial.println("Perintah web: servo 0");
-    } else if (perintah == "tare") {
-      Serial.println("Perintah web: tare...");
-      scale.tare(20);
-      sampleCount = 0;
-      sampleIdx = 0;
-      beratTerakhir = 0.0;
-      Serial.println("Tare selesai.");
-    }
-  } else {
-    Serial.printf("Gagal kirim ke server, kode: %d\n", code);
-  }
-
-  http.end();
+// ---------- Jaga WiFi tetap tersambung ----------
+void jagaWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  if (millis() - lastReconnect < RECONNECT_INTERVAL_MS) return;
+  lastReconnect = millis();
+  Serial.println("WiFi putus, mencoba konek ulang...");
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
 // ---------- Loop ----------
 void loop() {
+  ws.loop();
+  mqtt.update();
+  jagaWiFi();
+  hubungkanMQTT();
+  prosesPerintah();
+
   bacaTimbangan();
   bacaJarak();
   cekGerbang();
 
   if (millis() - lastPrint >= PRINT_INTERVAL_MS) {
     lastPrint = millis();
-    Serial.printf("Berat: %.1f g | Jarak: %.1f cm | Gerbang: %d\n", beratTerakhir, jarakCm, (int)gerbang);
+    Serial.printf("Berat: %.1f g | Jarak: %.1f cm | Gerbang: %d | MQTT: %s\n",
+                  beratTerakhir, jarakCm, (int)gerbang, mqtt.isConnected() ? "ok" : "putus");
   }
 
   if (millis() - lastSend >= SEND_INTERVAL_MS) {
     lastSend = millis();
-    kirimKeServer();
+    kirimData();
   }
 }

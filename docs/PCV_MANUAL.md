@@ -1,6 +1,9 @@
 # Panduan PCV manual: dataset berlabel sampai web
 
-Dokumen ini adalah alur utama PCV yang baru. Jalankan setiap perintah sendiri, satu per satu; periksa hasil satu tahap sebelum lanjut. Semua tahap menggunakan `python pcv.py <tahap>`; instalasi dependensi dan converter eksternal tetap dijalankan manual. `pcv.py` hanya menjalankan operasi yang kamu pilih memakai Python aktif, tanpa memasang software atau memilih environment lain.
+> [!NOTE]
+> **Catatan pembaruan alur `main`**: Sebagian perintah lama pada dokumen ini (`stage-yolo`, `adopt-coco`, `segment`, `plan`) sudah dihapus dan config v2 (`configs/coco.json`, `configs/yolo.json`) telah dipindahkan ke `apps/computer-vision/configs/archive/`. Untuk alur terbaru berbasis **LAB-CLAHE (`coco-v4-clahe.json` / `receiver-v4-clahe.json`)**, ikuti [README.md](../README.md) dan [apps/computer-vision/README.md](../apps/computer-vision/README.md).
+
+Dokumen ini adalah arsip panduan rinci PCV versi v2 (termasuk instalasi environment, Object Detection API, dan troubleshooting). Jalankan setiap perintah sendiri, satu per satu; periksa hasil satu tahap sebelum lanjut. Semua tahap menggunakan `python pcv.py <tahap>`; instalasi dependensi dan converter eksternal tetap dijalankan manual. `pcv.py` hanya menjalankan operasi yang kamu pilih memakai Python aktif, tanpa memasang software atau memilih environment lain.
 
 Target utama: **Linux native, CPU Ryzen, Python 3.11 64-bit, TensorFlow 2.15.1, SSD MobileNet V2 FPNLite 320×320**. Radeon iGPU laptop tidak dipakai oleh backend ini. Windows bisa dipakai untuk persiapan data dan inference; training paket proyek ini dijalankan pada Linux/WSL2. GPU NVIDIA opsional dibahas di bagian 15.
 

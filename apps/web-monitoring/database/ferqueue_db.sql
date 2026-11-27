@@ -98,5 +98,5 @@ ON DUPLICATE KEY UPDATE
     nama_petugas = VALUES(nama_petugas);
 
 -- ==============================================================================
--- SELESAI. Database FERQUEUE siap digunakan (3 tabel).
+-- SELESAI. Database FERQUEUE siap digunakan (4 tabel).
 -- ==============================================================================

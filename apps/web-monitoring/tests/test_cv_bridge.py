@@ -37,8 +37,8 @@ class CameraIntegrationTests(unittest.TestCase):
         self.assertNotIn('Origin', sent.headers)
 
     def test_camera_geometry_header_passes_through_bridge(self):
-        payload = {'detections': [], 'calibration': {'status': 'ready', 'method': 'trigonometry'}}
-        geometry = '27.7,14.3,1.022766'
+        payload = {'detections': [], 'calibration': {'status': 'ready', 'method': 'pinhole_side'}}
+        geometry = '27.7,1.022766'
         with patch('cv_bridge.urlopen', return_value=io.BytesIO(json.dumps(payload).encode())) as upstream:
             result = self.client.post('/api/detect', data=b'jpeg', content_type='image/jpeg',
                                       headers={'X-Camera-Geometry': geometry})

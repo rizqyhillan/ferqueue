@@ -1,5 +1,8 @@
 # Panduan PCV untuk laptop Windows dengan RTX 4060
 
+> [!NOTE]
+> **Catatan pembaruan alur `main`**: Bagian instalasi driver NVIDIA & WSL2 di bawah masih relevan, namun beberapa perintah CLI lama (`stage-yolo`, `adopt-coco`, `segment`, `plan`) sudah dihapus dan `configs/coco.json` / `configs/yolo.json` kini ada di `apps/computer-vision/configs/archive/`. Untuk perintah training & inference terbaru (**LAB-CLAHE**, `coco-v4-clahe.json`, `receiver-v4-clahe.json`), ikuti [README.md](../README.md) dan [apps/computer-vision/README.md](../apps/computer-vision/README.md).
+
 Panduan ini mengikuti alur [PCV_MANUAL.md](PCV_MANUAL.md), dari dataset YOLO berlabel sampai deteksi kamera di browser. Windows menjalankan driver NVIDIA dan browser. **Ubuntu di WSL2** menjalankan Python 3.11, TensorFlow 2.15.1, dan training SSD MobileNet V2 FPNLite 320×320. TensorFlow 2.15.1 memakai WSL2 untuk mengakses GPU NVIDIA dari laptop Windows. [Dukungan platform TensorFlow](https://www.tensorflow.org/install/pip).
 
 Jalankan perintah satu per satu. Perintah berlabel **PowerShell** dijalankan di Windows. Semua blok **Bash** dijalankan di terminal Ubuntu, dari root folder `ferqueue` setelah repo tersedia, kecuali saat berpindah ke folder converter.

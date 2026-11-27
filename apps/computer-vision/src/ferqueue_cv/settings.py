@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .dataset import validate_ratios
 
-DEFAULT_CONFIG = 'apps/computer-vision/configs/receiver-v4-clahe.json'
+DEFAULT_CONFIG = 'apps/computer-vision/configs/receiver-v5-clahe.json'
 DISPLAY_KEYS = {'confidence_threshold', 'nms_iou_threshold', 'max_detections', 'class_agnostic_nms'}
 
 
@@ -99,5 +99,5 @@ def training_plan(config, manifest):
 
 
 def training_identity(config):
-    """Display filtering and review-only masks do not affect training inputs."""
+    """Display filtering and legacy review-only keys do not affect training inputs."""
     return {key: value for key, value in config.items() if key not in DISPLAY_KEYS | {'segmentation'}}

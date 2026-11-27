@@ -1,7 +1,8 @@
 import base64
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import db
 from app import app, antrean_perintah, riwayat_pemeriksaan, CAPTURES_DIR
 
 
@@ -24,19 +25,67 @@ class WebMonitoringPagesTests(unittest.TestCase):
         self.assertIn(b'/static/css/login.css', res.data)
 
     def test_login_post_and_redirect_to_dashboard(self):
-        res = self.client.post('/login', data={'username': 'operator', 'password': 'password123'})
+        with patch('db.get_db_connection', return_value=None):
+            res = self.client.post('/login', data={'username': 'operator', 'password': 'operator123'})
         self.assertEqual(res.status_code, 302)
         self.assertIn('/dashboard', res.headers['Location'])
 
         # Following redirect to dashboard
         with self.client.session_transaction() as sess:
-            self.assertEqual(sess.get('user'), 'operator')
+            self.assertEqual(sess.get('user'), 'Rian Setiawan')
+            self.assertEqual(sess.get('username'), 'operator')
 
         dash = self.client.get('/dashboard')
         self.assertEqual(dash.status_code, 200)
         self.assertIn(b'Ringkasan Operasional Hari Ini', dash.data)
         self.assertIn(b'/static/css/dashboard.css', dash.data)
         self.assertIn(b'/static/js/dashboard.js', dash.data)
+
+    def test_login_rejects_invalid_credentials_and_supports_all_default_accounts_offline(self):
+        with patch('db.get_db_connection', return_value=None):
+            bad = self.client.post('/login', data={'username': 'operator', 'password': 'wrongpassword'})
+            self.assertEqual(bad.status_code, 200)
+            self.assertIn(b'Username atau password salah.', bad.data)
+
+            for username, password, expected_name in db.DEFAULT_PETUGAS:
+                with self.subTest(username=username):
+                    client = app.test_client()
+                    res = client.post('/login', data={'username': username, 'password': password})
+                    self.assertEqual(res.status_code, 302)
+                    self.assertIn('/dashboard', res.headers['Location'])
+                    with client.session_transaction() as sess:
+                        self.assertEqual(sess.get('user'), expected_name)
+                        self.assertEqual(sess.get('username'), username)
+
+    def test_simpan_pemeriksaan_adapts_optional_columns(self):
+        sample = {
+            'id_pemeriksaan': 'CHK-TEST-001',
+            'nomor_tiket': 'FQ-261126-001',
+            'nama_pengemudi': 'Budi',
+            'nama_petugas': 'Rian Setiawan',
+            'jenis_kendaraan': 'Mobil',
+            'golongan': 'A',
+            'panjang_cm': 10.5,
+            'tinggi_cm': 4.2,
+            'berat_aktual_gram': 45.0,
+            'batas_maksimum_gram': 55.0,
+            'status': 'Normal',
+            'foto_url': '/static/captures/CHK-TEST-001.jpg',
+        }
+        for has_petugas, has_foto in ((True, True), (False, True), (True, False), (False, False)):
+            with self.subTest(has_petugas=has_petugas, has_foto=has_foto):
+                mock_cursor = MagicMock()
+                mock_conn = MagicMock()
+                mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+                with patch('db.get_db_connection', return_value=mock_conn), \
+                     patch('db._ensure_petugas_column', return_value=has_petugas), \
+                     patch('db._ensure_foto_column', return_value=has_foto):
+                    ok = db.simpan_pemeriksaan(sample)
+                self.assertTrue(ok)
+                executed_sql = mock_cursor.execute.call_args_list[0].args[0]
+                self.assertEqual('nama_petugas' in executed_sql, has_petugas)
+                self.assertEqual('foto_url' in executed_sql, has_foto)
+                mock_conn.close.assert_called_once()
 
     def test_protected_routes_redirect_unauthenticated_users(self):
         for path in ['/dashboard', '/monitoring', '/riwayat', '/ai-assistant']:
@@ -202,6 +251,43 @@ class WebMonitoringPagesTests(unittest.TestCase):
         self.assertEqual(servo.status_code, 200)
         post2 = self.client.post('/api/berat', json={'berat': 0.0})
         self.assertEqual(post2.data.decode(), 'servo90')
+
+    def test_mqtt_callbacks_and_command_publish(self):
+        import app as app_mod
+
+        fake_client = MagicMock()
+        app_mod.on_connect(fake_client, None, None, 0, None)
+        fake_client.subscribe.assert_called_once_with(app_mod.TOPIC_DATA)
+
+        fake_msg = MagicMock()
+        fake_msg.payload = b'{"berat": 72.5, "servo": 90, "jarak": 14.2, "gerbang": "menunggu"}'
+        app_mod.state_kendaraan['golongan'] = 'A'
+        app_mod.on_message(fake_client, None, fake_msg)
+
+        self.assertEqual(app_mod.state_iot['berat'], 72.5)
+        self.assertEqual(app_mod.state_iot['servo'], 90)
+        self.assertEqual(app_mod.state_iot['jarak'], 14.2)
+        self.assertEqual(app_mod.state_iot['gerbang'], 'menunggu')
+        self.assertIsNotNone(app_mod.state_iot['waktu'])
+        self.assertEqual(app_mod.state_kendaraan['berat_gram'], 72.5)
+        self.assertEqual(app_mod.state_kendaraan['W'], 72.5)
+        self.assertEqual(app_mod.state_kendaraan['status'], 'Overweight')
+
+        # Payload rusak tidak boleh melempar exception atau menimpa state
+        bad_msg = MagicMock()
+        bad_msg.payload = b'bukan-json'
+        app_mod.on_message(fake_client, None, bad_msg)
+        self.assertEqual(app_mod.state_iot['berat'], 72.5)
+
+        # Endpoint kontrol gerbang mempublish perintah ke topik MQTT
+        with patch.object(app_mod, 'mqtt_client', fake_client):
+            res_buka = self.client.post('/api/buka')
+            self.assertEqual(res_buka.status_code, 200)
+            fake_client.publish.assert_called_with(app_mod.TOPIC_PERINTAH, 'buka')
+
+            res_tare = self.client.post('/api/tare')
+            self.assertEqual(res_tare.status_code, 200)
+            fake_client.publish.assert_called_with(app_mod.TOPIC_PERINTAH, 'tare')
 
     def test_ticket_overweight_and_problematic_list(self):
         with patch('app.simpan_pemeriksaan', return_value=False), \

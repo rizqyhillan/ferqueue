@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import re
 import socket
@@ -22,6 +23,11 @@ try:
 except ImportError:
     def load_dotenv(*_args, **_kwargs):
         return False
+
+try:
+    import paho.mqtt.client as mqtt
+except ImportError:
+    mqtt = None
 
 import rag_service
 from db import (
@@ -184,9 +190,87 @@ def generate_nomor_tiket() -> str:
     return f"TKT-{now.strftime('%Y%m%d%H%M%S')}-{int(now.microsecond / 1000):03d}"
 
 
+# ==========================================================
+# 1B. KONEKSI MQTT (ESP32 LOAD CELL & GERBANG)
+# ==========================================================
+NIM = os.getenv("MQTT_NIM", "E41240977")   # harus sama persis dengan di firmware
+MQTT_HOST = os.getenv("MQTT_HOST", "mqtt.walker880.my.id")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "443"))
+MQTT_PATH = os.getenv("MQTT_PATH", "/mqtt")
+TOPIC_DATA = f"{NIM}/data"
+TOPIC_PERINTAH = f"{NIM}/perintah"
+
+
+def on_connect(client, userdata, flags, reason_code, properties):
+    print(f"[MQTT] terhubung: {reason_code}", flush=True)
+    client.subscribe(TOPIC_DATA)
+
+
+def on_message(client, userdata, msg):
+    try:
+        data = json.loads(msg.payload.decode())
+        berat = float(data.get("berat", 0.0))
+    except Exception:
+        return
+    try:
+        servo = int(data.get("servo", 0))
+    except (ValueError, TypeError):
+        servo = 0
+    try:
+        raw_jarak = data.get("jarak", -1)
+        jarak = float(raw_jarak) if raw_jarak is not None else -1.0
+    except (ValueError, TypeError):
+        jarak = -1.0
+
+    state_iot["berat"] = berat
+    state_iot["servo"] = servo
+    state_iot["jarak"] = jarak
+    state_iot["gerbang"] = str(data.get("gerbang") or "tutup")
+    state_iot["waktu"] = datetime.now().isoformat(timespec="seconds")
+
+    state_kendaraan["berat"] = berat
+    state_kendaraan["berat_gram"] = berat
+    state_kendaraan["berat_kg"] = round(berat / 1000.0, 4)
+    state_kendaraan["W"] = berat
+    try:
+        hasil = validasi_berat(state_kendaraan["golongan"], berat)
+        state_kendaraan["status"] = hasil["status"]
+    except ValueError:
+        pass
+
+
+mqtt_client = None
+if mqtt is not None:
+    try:
+        mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, transport="websockets")
+        mqtt_client.ws_set_options(path=MQTT_PATH)
+        mqtt_client.tls_set()
+        # mqtt_client.username_pw_set("USER", "PASS")   # buka kalau broker butuh login
+        if os.getenv("MQTT_USER"):
+            mqtt_client.username_pw_set(os.getenv("MQTT_USER"), os.getenv("MQTT_PASS", ""))
+        mqtt_client.on_connect = on_connect
+        mqtt_client.on_message = on_message
+        mqtt_client.connect_async(MQTT_HOST, MQTT_PORT, keepalive=30)
+        mqtt_client.loop_start()
+    except Exception as e:
+        app.logger.warning(f"[MQTT] gagal inisialisasi client: {e}")
+        mqtt_client = None
+else:
+    app.logger.warning("[MQTT] paho-mqtt belum terpasang; pasang dengan 'pip install paho-mqtt'.")
+
+
+def kirim_perintah(perintah):
+    if mqtt_client is not None:
+        try:
+            mqtt_client.publish(TOPIC_PERINTAH, perintah)
+        except Exception as e:
+            app.logger.warning(f"[MQTT] gagal kirim perintah '{perintah}': {e}")
+
+
 def queue_command(cmd: str) -> None:
     if cmd not in antrean_perintah:
         antrean_perintah.append(cmd)
+    kirim_perintah(cmd)
 
 
 def save_capture_photo(id_pemeriksaan: str, photo_data_url: str | None) -> str | None:

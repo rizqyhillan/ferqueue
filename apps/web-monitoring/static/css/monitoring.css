@@ -989,7 +989,7 @@
   }
 }
 
-/* Kalibrasi Dimensi Trigonometri & Jarak Kamera */
+/* Kalibrasi Dimensi Kamera Samping Tegak Lurus (Pinhole) */
 #camera-feed[data-pcv="true"] {
   object-fit: contain;
   object-position: center;
@@ -1045,7 +1045,7 @@
 }
 .geo-inputs-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .geo-field {
@@ -1078,7 +1078,7 @@
 }
 @media (max-width: 680px) {
   .geo-inputs-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
   .geo-summary-pill {
     margin-left: 0;

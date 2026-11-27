@@ -1,7 +1,7 @@
 /**
  * live_detection.js — FERQUEUE Web Monitoring
  * Mengirim frame kamera / gambar upload ke /api/detect, menggambar bounding-box,
- * serta menangani kalibrasi & pengukuran dimensi berbasis trigonometri geometri kamera.
+ * serta menangani kalibrasi & pengukuran dimensi berbasis geometri pinhole kamera samping tegak lurus.
  */
 
 const video = document.querySelector('#camera-video');
@@ -10,17 +10,15 @@ const viewport = document.querySelector('#camera-viewport') || document.querySel
 
 const geoStatus = document.querySelector('#geo-status');
 const geoSummary = document.querySelector('#geo-summary');
-const geoDPerpInput = document.querySelector('#geo-d-perp');
-const geoDParallelInput = document.querySelector('#geo-d-parallel');
+const geoDistanceInput = document.querySelector('#geo-distance');
 const geoRefCmInput = document.querySelector('#geo-ref-cm');
 const geoFocalNormInput = document.querySelector('#geo-focal-norm');
 const calibrateGeoButton = document.querySelector('#calibrate-geometry');
 const clearGeoButton = document.querySelector('#clear-geometry');
 
-const GEO_STORAGE_KEY = 'ferqueue.camera_geometry.v1';
+const GEO_STORAGE_KEY = 'ferqueue.camera_geometry.v2';
 const DEFAULT_GEO = {
-  dPerpCm: 27.7,
-  dParallelCm: 14.3,
+  distanceCm: 27.7,
   refCm: 10.0,
   focalNorm: null,
 };
@@ -28,7 +26,7 @@ const DEFAULT_GEO = {
 if (!video || !uploadedImage || !viewport) {
   console.warn('[live_detection] Elemen DOM kamera tidak ditemukan — module dilewati.');
 } else {
-  const hasTrigUI = Boolean(geoDPerpInput && geoDParallelInput && geoFocalNormInput);
+  const hasGeoUI = Boolean(geoDistanceInput && geoFocalNormInput);
   const frame = document.createElement('canvas');
   const frameContext = frame.getContext('2d');
   const overlay = document.createElement('canvas');
@@ -54,7 +52,7 @@ if (!video || !uploadedImage || !viewport) {
   let displayedResult = null;
   let lastUpload = null;
 
-  // Mode kalibrasi geometri segitiga & jarak kamera (trigonometri)
+  // Mode kalibrasi geometri pinhole kamera samping tegak lurus (garis lurus)
   let geo = loadSavedGeometry();
   let calibratingGeo = false;
   let geoFirstPoint = null;
@@ -66,8 +64,7 @@ if (!video || !uploadedImage || !viewport) {
       if (!raw) return { ...DEFAULT_GEO };
       const parsed = JSON.parse(raw);
       return {
-        dPerpCm: Number.isFinite(parsed.dPerpCm) && parsed.dPerpCm > 0 ? parsed.dPerpCm : DEFAULT_GEO.dPerpCm,
-        dParallelCm: Number.isFinite(parsed.dParallelCm) && parsed.dParallelCm >= 0 ? parsed.dParallelCm : DEFAULT_GEO.dParallelCm,
+        distanceCm: Number.isFinite(parsed.distanceCm) && parsed.distanceCm > 0 ? parsed.distanceCm : DEFAULT_GEO.distanceCm,
         refCm: Number.isFinite(parsed.refCm) && parsed.refCm > 0 ? parsed.refCm : DEFAULT_GEO.refCm,
         focalNorm: Number.isFinite(parsed.focalNorm) && parsed.focalNorm > 0 ? parsed.focalNorm : null,
       };
@@ -89,25 +86,22 @@ if (!video || !uploadedImage || !viewport) {
   }
 
   function syncGeoInputsFromState() {
-    if (!hasTrigUI) return;
-    geoDPerpInput.value = String(geo.dPerpCm);
-    geoDParallelInput.value = String(geo.dParallelCm);
+    if (!hasGeoUI) return;
+    geoDistanceInput.value = String(geo.distanceCm);
     if (geoRefCmInput) geoRefCmInput.value = String(geo.refCm);
     geoFocalNormInput.value = geo.focalNorm ? String(geo.focalNorm) : '';
     updateGeoSummary();
   }
 
   function readGeoFromInputs() {
-    if (!hasTrigUI) return;
-    const dPerp = Number(geoDPerpInput.value);
-    const dParallel = Number(geoDParallelInput.value);
+    if (!hasGeoUI) return;
+    const distance = Number(geoDistanceInput.value);
     const refCm = geoRefCmInput ? Number(geoRefCmInput.value) : geo.refCm;
     const focalRaw = geoFocalNormInput.value.trim();
     const focalNorm = focalRaw ? Number(focalRaw) : null;
     geo = {
       ...geo,
-      dPerpCm: Number.isFinite(dPerp) && dPerp > 0 ? dPerp : NaN,
-      dParallelCm: Number.isFinite(dParallel) && dParallel >= 0 ? dParallel : NaN,
+      distanceCm: Number.isFinite(distance) && distance > 0 ? distance : NaN,
       refCm: Number.isFinite(refCm) && refCm > 0 ? refCm : NaN,
       focalNorm: focalNorm !== null && Number.isFinite(focalNorm) && focalNorm > 0 ? focalNorm : null,
     };
@@ -117,18 +111,16 @@ if (!video || !uploadedImage || !viewport) {
 
   function updateGeoSummary() {
     if (!geoSummary) return;
-    if (!(geo.dPerpCm > 0 && geo.dParallelCm >= 0)) {
-      geoSummary.textContent = 'Isi jarak segitiga valid';
+    if (!(geo.distanceCm > 0)) {
+      geoSummary.textContent = 'Isi jarak kamera valid';
       return;
     }
-    const distance = Math.hypot(geo.dPerpCm, geo.dParallelCm);
-    const yawDeg = Math.atan2(geo.dParallelCm, geo.dPerpCm) * (180 / Math.PI);
-    geoSummary.textContent = `D = ${formatId(distance, 2)} cm · θ = ${formatId(yawDeg, 2)}°`;
+    geoSummary.textContent = `D = ${formatId(geo.distanceCm, 2)} cm · Tegak lurus`;
   }
 
   function currentGeometryHeader() {
-    if (!(geo.dPerpCm > 0 && geo.dParallelCm >= 0 && geo.focalNorm > 0)) return null;
-    return `${geo.dPerpCm},${geo.dParallelCm},${geo.focalNorm}`;
+    if (!(geo.distanceCm > 0 && geo.focalNorm > 0)) return null;
+    return `${geo.distanceCm},${geo.focalNorm}`;
   }
 
   function setLabel(selector, text) {
@@ -231,7 +223,7 @@ if (!video || !uploadedImage || !viewport) {
     const messages = {
       multiple_vehicles: 'Sisakan satu kendaraan di dalam frame.',
       vehicle_clipped: 'Pastikan seluruh kendaraan masuk ke dalam frame.',
-      vehicle_too_small: 'Kotak kendaraan terlalu kecil untuk koreksi sudut. Periksa kalibrasi panjang fokus.',
+      vehicle_too_small: 'Kotak kendaraan terlalu kecil. Periksa kalibrasi panjang fokus.',
       no_vehicle: displayedResult?.calibration_only ? 'Skala siap diuji. Jalankan model untuk mengukur kendaraan.' : 'Menunggu kotak kendaraan.',
     };
 
@@ -243,16 +235,16 @@ if (!video || !uploadedImage || !viewport) {
     } else if (calibratingGeo) {
       text = geoFirstPoint
         ? 'Klik ujung kedua objek acuan di gambar.'
-        : 'Klik ujung pertama objek acuan di titik kendaraan (menghadap lurus ke lensa).';
+        : 'Klik ujung pertama objek acuan di titik kendaraan (sejajar lensa kamera).';
     } else if (!currentGeometryHeader()) {
       text = 'Letakkan penggaris/kartu acuan di titik kendaraan lalu klik "Kalibrasi acuan (2 titik)" (cukup 1×).';
     } else if (calibration?.geometry) {
       const g = calibration.geometry;
       const scale = g.mm_per_px.toLocaleString('id-ID', { maximumFractionDigits: 3 });
-      text = `Jarak ${formatId(g.distance_cm, 2)} cm · θ ${formatId(g.yaw_deg, 2)}° · Skala ${scale} mm/px`;
+      text = `Jarak ${formatId(g.distance_cm, 2)} cm · Skala ${scale} mm/px`;
       if (!estimated && measurement?.status) text += ` · ${messages[measurement.status] ?? measurement.status}`;
     } else {
-      text = 'Menghitung dimensi dari geometri kamera…';
+      text = 'Menghitung dimensi dari jarak kamera…';
     }
 
     if (geoStatus.textContent !== text) geoStatus.textContent = text;
@@ -286,7 +278,7 @@ if (!video || !uploadedImage || !viewport) {
   window.addEventListener('ferqueue:camera-reset', () => resetCalibration());
   new ResizeObserver(drawOverlay).observe(viewport);
 
-  for (const input of [geoDPerpInput, geoDParallelInput, geoRefCmInput, geoFocalNormInput].filter(Boolean)) {
+  for (const input of [geoDistanceInput, geoRefCmInput, geoFocalNormInput].filter(Boolean)) {
     input.addEventListener('input', () => {
       readGeoFromInputs();
       displayedResult = null;
@@ -336,12 +328,11 @@ if (!video || !uploadedImage || !viewport) {
       const distNormW = Math.hypot(dx, dy);
       if (distNormW < 0.01) return;
       readGeoFromInputs();
-      if (!(geo.dPerpCm > 0 && geo.dParallelCm >= 0 && geo.refCm > 0)) {
-        if (geoStatus) geoStatus.textContent = 'Isi jarak segitiga dan lebar acuan (> 0) sebelum kalibrasi.';
+      if (!(geo.distanceCm > 0 && geo.refCm > 0)) {
+        if (geoStatus) geoStatus.textContent = 'Isi jarak kamera dan lebar acuan (> 0) sebelum kalibrasi.';
         return;
       }
-      const distanceCm = Math.hypot(geo.dPerpCm, geo.dParallelCm);
-      geo.focalNorm = Number(((distNormW * distanceCm) / geo.refCm).toFixed(6));
+      geo.focalNorm = Number(((distNormW * geo.distanceCm) / geo.refCm).toFixed(6));
       if (geoFocalNormInput) geoFocalNormInput.value = String(geo.focalNorm);
       geoRefLine = [startY, startX, y, x];
       calibratingGeo = false;

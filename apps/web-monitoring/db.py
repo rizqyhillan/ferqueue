@@ -31,12 +31,23 @@ DB_CONFIG = {
 _last_db_error_time = 0
 DB_RETRY_INTERVAL = 15
 _foto_column_checked = False
-_petugas_checked = False
+_petugas_table_checked = False
+_petugas_column_checked = False
+
+DEFAULT_PETUGAS = (
+    ("operator", "operator123", "Rian Setiawan"),
+    ("petugas2", "petugas123", "Dedi Kurniawan"),
+    ("admin", "admin123", "Administrator Gate"),
+)
+_DEFAULT_PETUGAS_BY_USER = {
+    username: {"username": username, "password": password, "nama_petugas": nama}
+    for username, password, nama in DEFAULT_PETUGAS
+}
 
 
 def _ensure_petugas_table(conn):
-    global _petugas_checked
-    if _petugas_checked:
+    global _petugas_table_checked
+    if _petugas_table_checked:
         return True
     try:
         with conn.cursor() as cur:
@@ -53,25 +64,33 @@ def _ensure_petugas_table(conn):
             cur.execute("SELECT COUNT(*) AS total FROM petugas")
             row = cur.fetchone()
             if not row or (row.get("total") if isinstance(row, dict) else row[0]) == 0:
-                cur.execute("""
-                    INSERT INTO petugas (username, password, nama_petugas)
-                    VALUES
-                        ('operator', 'operator123', 'Rian Setiawan'),
-                        ('petugas2', 'petugas123', 'Dedi Kurniawan'),
-                        ('admin',    'admin123',    'Administrator Gate')
-                """)
+                cur.executemany(
+                    "INSERT INTO petugas (username, password, nama_petugas) VALUES (%s, %s, %s)",
+                    DEFAULT_PETUGAS,
+                )
+        _petugas_table_checked = True
+        return True
+    except Exception as e:
+        print(f"[DB WARNING] Gagal memastikan tabel petugas: {e}")
+        return False
 
-            # Pastikan kolom nama_petugas ada di riwayat_pemeriksaan
+
+def _ensure_petugas_column(conn):
+    global _petugas_column_checked
+    if _petugas_column_checked:
+        return True
+    try:
+        with conn.cursor() as cur:
             cur.execute("SHOW COLUMNS FROM riwayat_pemeriksaan LIKE 'nama_petugas'")
             if not cur.fetchone():
                 cur.execute(
                     "ALTER TABLE riwayat_pemeriksaan "
                     "ADD COLUMN nama_petugas VARCHAR(100) NOT NULL DEFAULT 'Operator' AFTER nama_pengemudi"
                 )
-        _petugas_checked = True
+        _petugas_column_checked = True
         return True
     except Exception as e:
-        print(f"[DB WARNING] Gagal memastikan tabel/kolom petugas: {e}")
+        print(f"[DB WARNING] Tidak dapat memastikan kolom nama_petugas: {e}")
         return False
 
 
@@ -79,9 +98,10 @@ def autentikasi_petugas(username: str, password: str) -> dict | None:
     """Verifikasi login petugas dari tabel database MySQL."""
     conn = get_db_connection()
     if not conn:
-        # Fallback offline jika MySQL belum start: akun default tetap bisa login
-        if username == "operator" and password == "operator123":
-            return {"username": "operator", "nama_petugas": "Rian Setiawan"}
+        # Fallback offline jika MySQL belum start: seluruh akun default tetap bisa login
+        akun = _DEFAULT_PETUGAS_BY_USER.get(username)
+        if akun and password == akun["password"]:
+            return {"username": akun["username"], "nama_petugas": akun["nama_petugas"]}
         return None
 
     try:
@@ -207,29 +227,30 @@ def simpan_pemeriksaan(data: dict) -> bool:
         return False
 
     try:
-        _ensure_petugas_table(conn)
+        has_petugas_col = _ensure_petugas_column(conn)
         has_foto_col = _ensure_foto_column(conn)
+        columns = ["id_pemeriksaan", "nomor_tiket", "nama_pengemudi"]
+        if has_petugas_col:
+            columns.append("nama_petugas")
+        columns.extend([
+            "jenis_kendaraan",
+            "golongan",
+            "panjang_cm",
+            "tinggi_cm",
+            "berat_aktual_gram",
+            "batas_maksimum_gram",
+            "status",
+        ])
+        if has_foto_col:
+            columns.append("foto_url")
+
+        col_list = ", ".join(columns)
+        val_list = ", ".join(f"%({col})s" for col in columns)
         with conn.cursor() as cur:
-            if has_foto_col:
-                cur.execute("""
-                    INSERT INTO riwayat_pemeriksaan (
-                        id_pemeriksaan, nomor_tiket, nama_pengemudi, nama_petugas, jenis_kendaraan, golongan,
-                        panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status, foto_url
-                    ) VALUES (
-                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(nama_petugas)s, %(jenis_kendaraan)s, %(golongan)s,
-                        %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s, %(foto_url)s
-                    )
-                """, riwayat)
-            else:
-                cur.execute("""
-                    INSERT INTO riwayat_pemeriksaan (
-                        id_pemeriksaan, nomor_tiket, nama_pengemudi, nama_petugas, jenis_kendaraan, golongan,
-                        panjang_cm, tinggi_cm, berat_aktual_gram, batas_maksimum_gram, status
-                    ) VALUES (
-                        %(id_pemeriksaan)s, %(nomor_tiket)s, %(nama_pengemudi)s, %(nama_petugas)s, %(jenis_kendaraan)s, %(golongan)s,
-                        %(panjang_cm)s, %(tinggi_cm)s, %(berat_aktual_gram)s, %(batas_maksimum_gram)s, %(status)s
-                    )
-                """, riwayat)
+            cur.execute(
+                f"INSERT INTO riwayat_pemeriksaan ({col_list}) VALUES ({val_list})",
+                riwayat,
+            )
             if detail:
                 cur.execute("""
                     INSERT INTO detail_overweight (

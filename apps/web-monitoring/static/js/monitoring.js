@@ -928,7 +928,7 @@ function init() {
     });
   }
 
-  // Update dimensi panjang & tinggi dari kalibrasi kamera (trigonometri)
+  // Update dimensi panjang & tinggi dari kalibrasi kamera samping (pinhole)
   window.addEventListener('ferqueue:camera-measurement', (e) => {
     const active = Boolean(e.detail?.active);
     const estimate = e.detail?.estimate;

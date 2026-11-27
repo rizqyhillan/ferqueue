@@ -1,0 +1,28 @@
+{
+  "dataset_format": "yolo",
+  "dataset_dir": "data/raw/vehicles",
+  "prepared_dir": "data/processed/pcv-yolo-manifest-v5",
+  "run_dir": "models/mobilenet/runs/pcv-receiver-v5-clahe",
+  "seed": 42,
+  "train_ratio": 0.7,
+  "test_ratio": 0.3,
+  "batch_size": 8,
+  "epochs": 30,
+  "learning_rate": 0.004,
+  "freeze_batchnorm": false,
+  "checkpoint_every_n": 100,
+  "augmentation": {
+    "horizontal_flip": true,
+    "brightness_delta": 0.1
+  },
+  "preprocessing": {
+    "denoise_kernel": 0,
+    "clahe_clip_limit": 1.5,
+    "clahe_grid_size": 8,
+    "gamma": 1.0
+  },
+  "confidence_threshold": 0.5,
+  "nms_iou_threshold": 0.45,
+  "max_detections": 10,
+  "class_agnostic_nms": true
+}

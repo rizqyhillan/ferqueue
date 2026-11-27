@@ -89,40 +89,15 @@ let _topbarInitialized = false;
 let _topbarInterval = null;
 
 async function syncTopbarStatus() {
-  const gatePill = document.getElementById('topbar-gate-pill');
-  const scalePill = document.getElementById('topbar-scale-pill');
-  const cvPill = document.getElementById('topbar-cv-pill');
   const notifBadge = document.getElementById('topbar-notif-badge');
   const notifList = document.getElementById('topbar-notif-list');
 
-  if (!gatePill && !scalePill && !cvPill && !notifBadge && !notifList) return;
+  if (!notifBadge && !notifList) return;
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/system-status`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-
-    const isLive = Boolean(data.sensor_live);
-    const gerbang = String(data.gerbang || 'tutup').toLowerCase();
-    const isOpen = gerbang.includes('buka') || gerbang.includes('open');
-
-    if (gatePill) {
-      gatePill.textContent = isOpen ? 'Gerbang Terbuka' : (isLive ? 'Gerbang Tertutup' : 'Gerbang: Standby');
-      gatePill.classList.toggle('is-open-gate', isOpen);
-    }
-
-    if (scalePill) {
-      scalePill.textContent = isLive ? 'Sensor Timbangan OK' : 'Timbangan: Standby';
-      scalePill.classList.toggle('is-standby', !isLive);
-      scalePill.classList.remove('is-offline');
-    }
-
-    if (cvPill) {
-      const cvOnline = Boolean(data.cv_online);
-      cvPill.textContent = cvOnline ? 'Kamera PCV Aktif' : 'Kamera PCV: Standby';
-      cvPill.classList.toggle('is-standby', !cvOnline);
-      cvPill.classList.remove('is-offline');
-    }
 
     const list = Array.isArray(data.overweight_recent) ? data.overweight_recent : [];
     const totalOver = Number(data.overweight_count ?? list.length);
@@ -148,16 +123,6 @@ async function syncTopbarStatus() {
       }
     }
   } catch {
-    if (scalePill) {
-      scalePill.textContent = 'Timbangan: Offline';
-      scalePill.classList.remove('is-standby');
-      scalePill.classList.add('is-offline');
-    }
-    if (cvPill) {
-      cvPill.textContent = 'Kamera PCV: Offline';
-      cvPill.classList.remove('is-standby');
-      cvPill.classList.add('is-offline');
-    }
     if (notifList) {
       notifList.innerHTML = '<p class="topbar__popover-empty">Gagal memuat notifikasi.</p>';
     }
@@ -222,30 +187,9 @@ export function initTopbar() {
 }
 
 // ----------------------------------------------------------------
-// UPDATE CLOCK — dipanggil tiap detik
+// INISIALISASI TOPBAR (dipanggil dari semua halaman)
 // ----------------------------------------------------------------
-let _clockInterval = null;
-
-/**
- * Mulai update clock otomatis pada elemen #topbar-clock, #sidebar-clock, #sidebar-sync-clock
- * serta aktifkan sinkronisasi topbar.
- */
 export function startClock() {
-  function tick() {
-    const now = new Date();
-    const topbar = document.getElementById('topbar-clock');
-    const sidebar = document.getElementById('sidebar-clock');
-    const syncClock = document.getElementById('sidebar-sync-clock');
-    if (topbar) topbar.textContent = formatTopbarClock(now);
-    if (sidebar) sidebar.textContent = formatSidebarClock(now);
-    if (syncClock) {
-      const timePart = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
-      syncClock.textContent = `${timePart} UTC+7`;
-    }
-  }
-  tick();
-  if (_clockInterval) clearInterval(_clockInterval);
-  _clockInterval = setInterval(tick, 1000);
   initTopbar();
 }
 

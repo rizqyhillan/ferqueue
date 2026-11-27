@@ -1,6 +1,6 @@
 # FERQUEUE
 
-PCV deteksi kendaraan dengan **TensorFlow 2.15.1, preprocessing LAB-CLAHE halus, dan SSD MobileNet V2 FPNLite 320×320**, terhubung ke dashboard Flask untuk kamera live, unggah gambar, pengukuran dimensi trigonometri, validasi aturan anomali, dan AI Assistant LLM.
+PCV deteksi kendaraan dengan **TensorFlow 2.15.1, preprocessing LAB-CLAHE halus, dan SSD MobileNet V2 FPNLite 320×320**, terhubung ke dashboard Flask untuk kamera live, unggah gambar, pengukuran dimensi kamera samping (pinhole), validasi aturan anomali, dan AI Assistant LLM.
 
 ## Alur Utama PCV (LAB-CLAHE → SSD MobileNet V2 FPNLite)
 

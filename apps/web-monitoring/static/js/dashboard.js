@@ -1,17 +1,12 @@
 /**
  * dashboard.js — FERQUEUE Web Monitoring
- * Dashboard logic: Real-time stats, Chart.js hourly density, per-category averages,
- * recent activity table, and shift CSV report download.
+ * Dashboard logic: Real-time stats and Chart.js hourly density.
  */
 
 import {
   startClock,
   formatNumber,
   formatDateId,
-  getCurrentShiftWib,
-  escapeHtml,
-  downloadCsv,
-  toast,
   API_BASE_URL,
 } from './utils.js';
 
@@ -173,22 +168,9 @@ function updateDensityChart(series) {
   chartInstance.update('none');
 }
 
-function formatCm(val) {
-  if (val === null || val === undefined || !Number.isFinite(Number(val)) || Number(val) <= 0) return '—';
-  return `${Number(val).toFixed(1).replace('.', ',')} cm`;
-}
-
-function formatGram(val) {
-  if (val === null || val === undefined || !Number.isFinite(Number(val))) return '—';
-  return `${Number(val).toFixed(1).replace('.', ',')} g`;
-}
-
-function updateDateAndShift() {
-  const now = new Date();
+function updateOperationDate() {
   const dateEl = document.getElementById('dash-op-date');
-  const shiftEl = document.getElementById('dash-op-shift');
-  if (dateEl) dateEl.textContent = formatDateId(now);
-  if (shiftEl) shiftEl.textContent = getCurrentShiftWib(now);
+  if (dateEl) dateEl.textContent = formatDateId(new Date());
 }
 
 function updateStatsUI(data) {
@@ -250,144 +232,27 @@ function updateStatsUI(data) {
 
   const nowStr = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
   setText('dash-last-updated', `Terakhir diperbarui ${nowStr} WIB`);
-
-  // Update statistik rata-rata per kategori
-  const rata = data.rata_rata || {};
-  for (const key of ['truk', 'bus', 'mobil']) {
-    const bucket = rata[key];
-    if (bucket && bucket.count > 0) {
-      setText(`avg-${key}-p`, formatCm(bucket.panjang_cm));
-      setText(`avg-${key}-t`, formatCm(bucket.tinggi_cm));
-      setText(`avg-${key}-w`, formatGram(bucket.berat_gram));
-    } else {
-      setText(`avg-${key}-p`, '—');
-      setText(`avg-${key}-t`, '—');
-      setText(`avg-${key}-w`, '—');
-    }
-  }
-}
-
-function formatActivityTime(rawTime) {
-  if (!rawTime) return '—';
-  const dt = new Date(typeof rawTime === 'string' ? rawTime.replace(' ', 'T') : rawTime);
-  if (Number.isNaN(dt.getTime())) return String(rawTime);
-  const hhmm = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-  return `${hhmm} WIB`;
-}
-
-function renderActivities(rows) {
-  const tbody = document.getElementById('activity-tbody');
-  if (!tbody) return;
-
-  if (!Array.isArray(rows) || rows.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="7" style="text-align: center; padding: 28px; color: #94A3B8;">
-          Belum ada aktivitas pemeriksaan tercatat. Mulai pemeriksaan pada menu <a href="/monitoring" style="color: var(--clr-accent); font-weight: 600;">Monitoring</a>.
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  tbody.innerHTML = rows.slice(0, 8).map(item => {
-    const nomor = item.nomor_tiket || item.nomor || item.id_pemeriksaan || '—';
-    const jenis = item.jenis_kendaraan || item.jenis || 'Kendaraan';
-    const pVal = item.panjang_cm ?? item.P;
-    const tVal = item.tinggi_cm ?? item.T;
-    const berat = item.berat_aktual_gram ?? item.berat_gram ?? item.berat ?? 0;
-    const waktu = formatActivityTime(item.waktu_pemeriksaan || item.waktu);
-    const isOver = String(item.status || '').toLowerCase().includes('over');
-
-    const pillClass = isOver
-      ? 'activity-status-pill activity-status-pill--overweight'
-      : (item.nomor_tiket ? 'activity-status-pill activity-status-pill--terbit' : 'activity-status-pill activity-status-pill--lolos');
-    const pillLabel = isOver
-      ? 'Overweight'
-      : (item.nomor_tiket ? 'Tiket Terbit' : 'Normal');
-
-    return `
-      <tr>
-        <td><span class="activity-unit">${escapeHtml(nomor)}</span></td>
-        <td>${escapeHtml(jenis)}</td>
-        <td class="activity-dim">${escapeHtml(formatCm(pVal))}</td>
-        <td class="activity-dim">${escapeHtml(formatCm(tVal))}</td>
-        <td class="activity-berat">${escapeHtml(formatGram(berat))}</td>
-        <td class="activity-waktu">${escapeHtml(waktu)}</td>
-        <td><span class="${pillClass}">${pillLabel}</span></td>
-      </tr>
-    `;
-  }).join('');
 }
 
 async function refreshDashboard() {
-  updateDateAndShift();
+  updateOperationDate();
   try {
-    const [statsRes, actRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/api/stats`, { cache: 'no-store' }),
-      fetch(`${API_BASE_URL}/api/aktivitas`, { cache: 'no-store' }),
-    ]);
-
+    const statsRes = await fetch(`${API_BASE_URL}/api/stats`, { cache: 'no-store' });
     if (statsRes.ok) {
       const statsData = await statsRes.json();
       updateStatsUI(statsData);
-    }
-
-    if (actRes.ok) {
-      const actData = await actRes.json();
-      renderActivities(actData);
     }
   } catch (err) {
     console.warn('[dashboard] Gagal memuat data dashboard:', err);
   }
 }
 
-async function downloadShiftReport() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/riwayat`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('Gagal mengambil data riwayat');
-    const json = await res.json();
-    const rows = Array.isArray(json?.data) ? json.data : [];
-
-    if (rows.length === 0) {
-      toast('Belum ada data pemeriksaan untuk diunduh.', 'info');
-      return;
-    }
-
-    const headers = [
-      'ID Pemeriksaan', 'No. Tiket', 'Waktu', 'Pengemudi', 'Jenis Kendaraan',
-      'Golongan', 'Panjang (cm)', 'Tinggi (cm)', 'Berat Aktual (g)', 'Batas Maks (g)', 'Status',
-    ];
-    const csvRows = rows.map(r => [
-      r.id_pemeriksaan || '',
-      r.nomor_tiket || '-',
-      r.waktu_pemeriksaan || r.waktu || '',
-      r.nama_pengemudi || 'Pengemudi',
-      r.jenis_kendaraan || '',
-      r.golongan ? `Gol. ${r.golongan}` : '',
-      r.panjang_cm ?? 0,
-      r.tinggi_cm ?? 0,
-      r.berat_aktual_gram ?? 0,
-      r.batas_maksimum_gram ?? 0,
-      r.status || 'Normal',
-    ]);
-
-    const today = new Date().toISOString().slice(0, 10);
-    downloadCsv(`rekap_shift_ferqueue_${today}.csv`, headers, csvRows);
-    toast(`Rekap laporan shift (${rows.length} data) berhasil diunduh.`, 'success');
-  } catch (err) {
-    toast('Gagal mengunduh rekap laporan shift.', 'warning');
-  }
-}
-
 function init() {
   startClock();
-  updateDateAndShift();
+  updateOperationDate();
   initDensityChart();
   refreshDashboard();
   setInterval(refreshDashboard, 10000);
-
-  document.getElementById('btn-download-shift-report')?.addEventListener('click', downloadShiftReport);
 }
 
 document.addEventListener('DOMContentLoaded', init);

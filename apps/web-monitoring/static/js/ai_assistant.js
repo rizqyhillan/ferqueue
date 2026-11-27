@@ -1,8 +1,7 @@
 /**
  * ai_assistant.js — FERQUEUE Web Monitoring
  * Multi-turn persistent chat (up to 40 messages stored / 20 sent as LLM memory),
- * typed Daily Audit summary, Multimodal Visual Audit (captured & uploaded photos),
- * and SOP & RAG Knowledge Base Manager.
+ * typed Daily Audit summary, and Multimodal Visual Audit (captured & uploaded photos).
  */
 
 import { startClock, escapeHtml, toast, API_BASE_URL } from './utils.js';
@@ -24,10 +23,6 @@ let chatMessages = [];          // [{ role: 'user'|'assistant', content, title?,
 let activeVehicle = null;       // { id_pemeriksaan, label, foto_url }
 let pendingPhotoDataUrl = null; // Foto yang dilampirkan manual di kolom input
 let pendingPhotoName = '';
-
-// State Manajemen SOP
-let sopFiles = [];
-let currentSopFilename = '';
 
 function formatMarkdown(text) {
   if (!text) return '';
@@ -140,7 +135,6 @@ function renderGreeting() {
             <div>• <strong>Ketik Ringkasan Audit Harian:</strong> Cukup ketik <em>"buatkan ringkasan audit harian"</em> atau <em>"berapa truk overweight hari ini?"</em> untuk membaca statistik aktual database.</div>
             <div>• <strong>Audit Visual Multimodal:</strong> Pilih kasus overweight berfoto di sebelah kiri atau klik ikon <strong>📷</strong> untuk melampirkan foto kendaraan dan memverifikasi golongannya.</div>
             <div>• <strong>Diskusi Lanjutan (Multi-Turn):</strong> Menyimpan hingga ${MAX_STORED_MESSAGES} pesan terakhir sehingga pertanyaan lanjutan tetap nyambung.</div>
-            <div>• <strong>Kelola SOP &amp; RAG:</strong> Tambah, edit, atau sinkronisasi ulang dokumen SOP langsung lewat tombol <strong>Kelola SOP &amp; RAG</strong>.</div>
           </div>
         </div>
       </div>
@@ -448,214 +442,6 @@ async function loadProblematicVehicles() {
 }
 
 // ------------------------------------------------------------------
-// MANAJEMEN SOP & RE-INDEX RAG
-// ------------------------------------------------------------------
-function updateRagSummaryCard(ragStatus) {
-  const badge = document.getElementById('ai-rag-summary-badge');
-  const text = document.getElementById('ai-rag-summary-text');
-  const dlgStatus = document.getElementById('sop-dialog-status');
-  if (!ragStatus) return;
-
-  const filesCount = ragStatus.total_files ?? 0;
-  const chunksCount = ragStatus.vector_chunks ?? 0;
-  const ready = Boolean(ragStatus.vector_ready);
-
-  if (badge) {
-    badge.textContent = ready ? `${chunksCount} chunks · ChromaDB` : `${filesCount} SOP · Hybrid Lokal`;
-    badge.classList.toggle('is-local', !ready);
-  }
-  if (text) {
-    text.textContent = ready
-      ? `${filesCount} dokumen SOP terindeks di ChromaDB (${chunksCount} chunks) + fallback pencarian kata kunci aktif.`
-      : `${filesCount} dokumen SOP aktif menggunakan pencarian keyword lokal. Klik Re-index untuk menyinkronkan ke ChromaDB.`;
-  }
-  if (dlgStatus) {
-    dlgStatus.textContent = `${filesCount} dokumen SOP · Indeks ChromaDB: ${chunksCount} chunks · Model: ${ragStatus.model || 'Gemini'}`;
-  }
-}
-
-function renderSopFilesList() {
-  const listEl = document.getElementById('sop-files-list');
-  if (!listEl) return;
-
-  if (!sopFiles.length) {
-    listEl.innerHTML = '<div style="font-size:12px;color:#64748B;padding:12px;text-align:center;">Belum ada dokumen SOP.</div>';
-    return;
-  }
-
-  listEl.innerHTML = sopFiles.map(f => `
-    <button type="button" class="sop-file-item ${f.filename === currentSopFilename ? 'is-active' : ''}" data-filename="${escapeHtml(f.filename)}">
-      <div class="sop-file-name">${escapeHtml(f.filename)}</div>
-      <div class="sop-file-meta">${escapeHtml(f.word_count)} kata · ${escapeHtml(f.updated_at)}</div>
-    </button>
-  `).join('');
-
-  listEl.querySelectorAll('.sop-file-item').forEach(btn => {
-    btn.addEventListener('click', () => loadSopFileDetail(btn.dataset.filename));
-  });
-}
-
-async function loadSopList({ selectFirst = false } = {}) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/ai/knowledge`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('Gagal memuat daftar SOP');
-    const json = await res.json();
-    sopFiles = json.files || [];
-    updateRagSummaryCard(json.rag_status);
-    renderSopFilesList();
-
-    if (selectFirst && sopFiles.length > 0 && !currentSopFilename) {
-      await loadSopFileDetail(sopFiles[0].filename);
-    }
-  } catch (err) {
-    console.warn('[ai] Gagal memuat SOP:', err);
-  }
-}
-
-async function loadSopFileDetail(filename) {
-  if (!filename) return;
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/ai/knowledge/${encodeURIComponent(filename)}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('Gagal membaca dokumen SOP');
-    const json = await res.json();
-    currentSopFilename = json.file.filename;
-    const nameInput = document.getElementById('sop-filename-input');
-    const contentInput = document.getElementById('sop-content-input');
-    if (nameInput) nameInput.value = json.file.filename;
-    if (contentInput) contentInput.value = json.file.content;
-    renderSopFilesList();
-  } catch (err) {
-    toast(err.message, 'warning');
-  }
-}
-
-async function triggerReindex() {
-  toast('Menyinkronkan ulang indeks RAG...', 'info');
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/ai/knowledge/reindex`, { method: 'POST' });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || 'Gagal re-index RAG');
-    updateRagSummaryCard(json.rag_status);
-    if (json.reindex?.warning) {
-      toast(json.reindex.warning, 'warning', 5000);
-    } else {
-      toast(`RAG berhasil di-reindex (${json.reindex?.indexed_chunks || 0} chunks dari ${json.reindex?.indexed_files || 0} SOP).`, 'success');
-    }
-  } catch (err) {
-    toast(`Gagal re-index RAG: ${err.message}`, 'warning');
-  }
-}
-
-function initSopManager() {
-  const dialog = document.getElementById('sop-manager-dialog');
-  const openDialog = async () => {
-    await loadSopList({ selectFirst: true });
-    if (typeof dialog?.showModal === 'function') dialog.showModal();
-    else dialog?.setAttribute('open', '');
-  };
-
-  document.getElementById('btn-open-sop-manager')?.addEventListener('click', openDialog);
-  document.getElementById('btn-open-sop-manager-2')?.addEventListener('click', openDialog);
-  document.getElementById('btn-quick-reindex')?.addEventListener('click', triggerReindex);
-  document.getElementById('btn-sop-reindex')?.addEventListener('click', triggerReindex);
-
-  document.getElementById('btn-close-sop-dialog')?.addEventListener('click', () => dialog?.close());
-  dialog?.addEventListener('click', (e) => {
-    if (e.target === dialog) dialog.close();
-  });
-
-  document.getElementById('btn-sop-new')?.addEventListener('click', () => {
-    currentSopFilename = '';
-    const nameInput = document.getElementById('sop-filename-input');
-    const contentInput = document.getElementById('sop-content-input');
-    if (nameInput) {
-      nameInput.value = '';
-      nameInput.focus();
-    }
-    if (contentInput) contentInput.value = '# Judul SOP Baru\n\n';
-    renderSopFilesList();
-  });
-
-  const uploadBtn = document.getElementById('btn-sop-upload');
-  const uploadInput = document.getElementById('sop-file-upload');
-  uploadBtn?.addEventListener('click', () => uploadInput?.click());
-  uploadInput?.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const nameInput = document.getElementById('sop-filename-input');
-      const contentInput = document.getElementById('sop-content-input');
-      if (nameInput) nameInput.value = file.name;
-      if (contentInput) contentInput.value = text;
-      toast(`File ${file.name} dimuat ke editor. Klik "Simpan & Re-index" untuk menerapkan.`, 'info');
-    } catch {
-      toast('Gagal membaca file SOP yang diunggah.', 'warning');
-    }
-  });
-
-  document.getElementById('sop-editor-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const nameInput = document.getElementById('sop-filename-input');
-    const contentInput = document.getElementById('sop-content-input');
-    const saveBtn = document.getElementById('btn-sop-save');
-    const filename = nameInput?.value.trim() || '';
-    const content = contentInput?.value.trim() || '';
-    if (!filename || !content) return;
-
-    if (saveBtn) saveBtn.disabled = true;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/knowledge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, content }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Gagal menyimpan SOP');
-      currentSopFilename = json.file.filename;
-      if (nameInput) nameInput.value = currentSopFilename;
-      await loadSopList();
-      if (json.reindex?.warning) {
-        toast(`SOP ${currentSopFilename} tersimpan. ${json.reindex.warning}`, 'warning', 5000);
-      } else {
-        toast(`SOP ${currentSopFilename} tersimpan & RAG diperbarui (${json.reindex?.indexed_chunks || 0} chunks).`, 'success');
-      }
-    } catch (err) {
-      toast(err.message, 'warning');
-    } finally {
-      if (saveBtn) saveBtn.disabled = false;
-    }
-  });
-
-  document.getElementById('btn-sop-delete')?.addEventListener('click', async () => {
-    const nameInput = document.getElementById('sop-filename-input');
-    const filename = currentSopFilename || nameInput?.value.trim() || '';
-    if (!filename) {
-      toast('Pilih dokumen SOP yang ingin dihapus terlebih dahulu.', 'info');
-      return;
-    }
-    if (!window.confirm(`Hapus dokumen SOP "${filename}" dari basis pengetahuan?`)) return;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/knowledge/${encodeURIComponent(filename)}`, {
-        method: 'DELETE',
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Gagal menghapus SOP');
-      currentSopFilename = '';
-      if (nameInput) nameInput.value = '';
-      const contentInput = document.getElementById('sop-content-input');
-      if (contentInput) contentInput.value = '';
-      await loadSopList({ selectFirst: true });
-      toast(`SOP ${filename} dihapus & RAG diperbarui.`, 'info');
-    } catch (err) {
-      toast(err.message, 'warning');
-    }
-  });
-}
-
-// ------------------------------------------------------------------
 // LAMPIRAN FOTO MULTIMODAL DI CHAT
 // ------------------------------------------------------------------
 function initPhotoAttachment() {
@@ -694,8 +480,6 @@ function init() {
   updateContextBar();
 
   loadProblematicVehicles();
-  loadSopList();
-  initSopManager();
   initPhotoAttachment();
 
   document.getElementById('btn-refresh-cases')?.addEventListener('click', () => {
